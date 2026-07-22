@@ -142,6 +142,53 @@
   .save-status{ font-size:11px; color:var(--muted); }
 
   .empty-state, .loading-state{ text-align:center; padding:50px 20px; color:var(--muted); font-size:13.5px; grid-column:1/-1; }
+
+  /* ---- Detail modal ---- */
+  #modalOverlay{
+    display:none; position:fixed; inset:0; background:rgba(24,33,47,.45);
+    align-items:flex-start; justify-content:center; padding:40px 16px; overflow-y:auto; z-index:100;
+  }
+  #modalOverlay.show{ display:flex; }
+  .modal{
+    background:var(--surface); border-radius:14px; max-width:560px; width:100%;
+    padding:24px 26px 26px; box-shadow:0 10px 40px rgba(24,33,47,.25);
+  }
+  .modal-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:4px; }
+  .modal-top h2{ font-family:'Space Grotesk'; font-size:18px; margin:0; }
+  .modal-close{ background:none; border:none; font-size:20px; color:var(--muted); cursor:pointer; line-height:1; padding:2px; }
+  .modal-sub{ font-size:13px; color:var(--muted); margin-bottom:16px; }
+
+  .modal-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; font-size:13px; margin-bottom:16px;
+  }
+  .modal-grid .k{ color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:1px; }
+  .modal-grid .v{ font-family:'IBM Plex Mono'; font-size:12.5px; }
+
+  .modal-field{ margin-bottom:14px; }
+  .modal-field label{
+    display:block; font-size:10.5px; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.05em; font-weight:600; margin-bottom:5px;
+  }
+  .modal-field textarea, .modal-field input[type="text"]{
+    width:100%; border:1px solid var(--border); border-radius:8px; padding:9px 10px;
+    font-size:13.5px; font-family:inherit; resize:vertical;
+  }
+  .modal-field textarea{ min-height:70px; }
+  .modal-readonly{
+    font-size:12.5px; color:var(--muted); background:#F7F8FA; padding:8px 10px; border-radius:8px; line-height:1.4;
+  }
+
+  .modal-actions{ display:flex; justify-content:space-between; align-items:center; margin-top:18px; }
+  .modal-save-status{ font-size:12px; color:var(--muted); }
+  .modal-buttons{ display:flex; gap:8px; }
+  .modal-buttons button.save{
+    background:var(--ink); color:#fff; border:none; padding:9px 18px; border-radius:8px;
+    font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
+  .modal-buttons button.keystone{
+    background:none; border:1px solid var(--accent); color:var(--accent); padding:9px 16px;
+    border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
 </style>
 </head>
 <body>
@@ -199,6 +246,10 @@
 
   </div>
 
+  <div id="modalOverlay">
+    <div class="modal" id="modalContent"></div>
+  </div>
+
 <script>
   const CLIENT_ID = "6b04b1f9-b1d4-4366-aa47-12cbd7b9cd27";
   const TENANT_ID = "551cddfb-5bb5-4a53-aec6-063057585725";
@@ -217,6 +268,7 @@
 
   let statusFilter = "Active";
   let clientSearchDebounce = null;
+  let currentAlerts = [];
 
   function setViewState(signedIn) {
     document.getElementById("signinScreen").style.display = signedIn ? "none" : "flex";
@@ -338,6 +390,7 @@
 
     try {
       const alerts = await callApi("/alerts?" + params.toString());
+      currentAlerts = alerts;
       if (alerts.length === 0) {
         gallery.innerHTML = `<div class="empty-state">No alerts match these filters.</div>`;
         return;
@@ -349,23 +402,119 @@
   }
 
   document.getElementById("gallery").addEventListener("click", async (e) => {
-    if (!e.target.classList.contains("saveNoteBtn")) return;
-    const card = e.target.closest(".card");
-    const id = card.dataset.id;
-    const input = card.querySelector(".notesInput");
-    const statusEl = card.querySelector(".save-status");
-    statusEl.textContent = "Saving…";
-    try {
-      await callApi(`/alerts/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ alert_notes: input.value })
-      });
-      statusEl.textContent = "Saved";
-      setTimeout(() => { statusEl.textContent = ""; }, 2000);
-    } catch (err) {
-      statusEl.textContent = "Failed to save";
-      console.error(err);
+    if (e.target.classList.contains("saveNoteBtn")) {
+      const card = e.target.closest(".card");
+      const id = card.dataset.id;
+      const input = card.querySelector(".notesInput");
+      const statusEl = card.querySelector(".save-status");
+      statusEl.textContent = "Saving…";
+      try {
+        await callApi(`/alerts/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ alert_notes: input.value })
+        });
+        statusEl.textContent = "Saved";
+        setTimeout(() => { statusEl.textContent = ""; }, 2000);
+      } catch (err) {
+        statusEl.textContent = "Failed to save";
+        console.error(err);
+      }
+      return;
     }
+
+    if (e.target.closest(".keystone-link")) return;
+    if (e.target.tagName === "INPUT") return;
+
+    const card = e.target.closest(".card");
+    if (!card) return;
+    const alert = currentAlerts.find(a => String(a.id) === card.dataset.id);
+    if (alert) openModal(alert);
+  });
+
+  function renderModal(alert) {
+    const isEntered = !!alert.entered;
+    const instructions = alert.account_instructions ? escapeHtml(alert.account_instructions) : "";
+
+    return `
+      <div class="modal-top">
+        <h2>${escapeHtml(alert.client_name)}</h2>
+        <button class="modal-close" id="modalCloseBtn">&times;</button>
+      </div>
+      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · <span class="status-pill ${isEntered ? "entered" : "pending"}">${isEntered ? "Entered" : "Pending"}</span></div>
+
+      <div class="modal-grid">
+        <div><div class="k">Account number</div><div class="v">${escapeHtml(alert.account_number)}</div></div>
+        <div><div class="k">Account name</div><div class="v">${escapeHtml(alert.account_name)}</div></div>
+        <div><div class="k">Tax ID</div><div class="v">${escapeHtml(alert.tax_id) || "—"}</div></div>
+        <div><div class="k">Billing period</div><div class="v">${escapeHtml(alert.billing_period)}</div></div>
+        <div><div class="k">Payment method</div><div class="v">${escapeHtml(alert.payment_method) || "—"}</div></div>
+        <div><div class="k">Alert type</div><div class="v">${escapeHtml(alert.alert_type)}</div></div>
+        <div><div class="k">Last bill date</div><div class="v">${escapeHtml(alert.last_bill_date) || "—"}</div></div>
+        <div><div class="k">Last bill due</div><div class="v">${escapeHtml(alert.last_bill_due_date) || "—"}</div></div>
+      </div>
+
+      ${instructions ? `<div class="modal-field"><label>Account instructions</label><div class="modal-readonly">${instructions}</div></div>` : ""}
+
+      <div class="modal-field">
+        <label>Notes</label>
+        <textarea id="modalNotesInput">${escapeHtml(alert.alert_notes || "")}</textarea>
+      </div>
+
+      <div class="modal-field">
+        <label>Assigned to</label>
+        <input type="text" id="modalAssignedInput" placeholder="name@muc-corp.com" value="${escapeHtml(alert.assigned_to || "")}">
+      </div>
+
+      <div class="modal-actions">
+        <span class="modal-save-status" id="modalSaveStatus"></span>
+        <div class="modal-buttons">
+          <button class="keystone" onclick="window.open('${keystoneUrl(alert)}', '_blank')">Open in Keystone</button>
+          <button class="save" id="modalSaveBtn">Save changes</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function openModal(alert) {
+    document.getElementById("modalContent").innerHTML = renderModal(alert);
+    document.getElementById("modalOverlay").classList.add("show");
+
+    document.getElementById("modalCloseBtn").addEventListener("click", closeModal);
+
+    document.getElementById("modalSaveBtn").addEventListener("click", async () => {
+      const statusEl = document.getElementById("modalSaveStatus");
+      const notes = document.getElementById("modalNotesInput").value;
+      const assignedTo = document.getElementById("modalAssignedInput").value.trim();
+
+      statusEl.textContent = "Saving…";
+      try {
+        await callApi(`/alerts/${alert.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            alert_notes: notes,
+            assigned_to: assignedTo || null,
+            assigned_at: assignedTo ? new Date().toISOString() : null
+          })
+        });
+        statusEl.textContent = "Saved";
+        await loadAlerts();
+      } catch (err) {
+        statusEl.textContent = "Failed to save";
+        console.error(err);
+      }
+    });
+  }
+
+  function closeModal() {
+    document.getElementById("modalOverlay").classList.remove("show");
+  }
+
+  document.getElementById("modalOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "modalOverlay") closeModal();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeModal();
   });
 
   document.getElementById("statusSeg").addEventListener("click", (e) => {
