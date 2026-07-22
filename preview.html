@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alerts App</title>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  :root{
+    --bg:#F3F5F8;
+    --surface:#FFFFFF;
+    --ink:#18212F;
+    --muted:#66748A;
+    --border:#E3E8EF;
+    --pending:#C2760C;
+    --pending-bg:#FDF3E3;
+    --entered:#0E8F79;
+    --entered-bg:#E4F6F1;
+    --accent:#2B5FD9;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Sign-in gate ---- */
+  #signinScreen{ min-height:100vh; display:flex; align-items:center; justify-content:center; }
+  #signinScreen .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:40px; text-align:center; box-shadow:0 3px 14px rgba(24,33,47,.08);
+  }
+  #signinScreen h1{ font-family:'Space Grotesk'; font-weight:700; font-size:20px; margin:0 0 8px; }
+  #signinScreen p{ color:var(--muted); margin-bottom:20px; font-size:14px; }
+  button.primary{
+    background:var(--accent); color:#fff; border:none; padding:10px 20px;
+    border-radius:9px; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
+  button.primary:hover{ background:#3a6ef0; }
+
+  /* ---- App shell ---- */
+  .app{ max-width:1240px; margin:0 auto; padding:28px 24px 80px; display:none; }
+
+  .topbar{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    margin-bottom:22px; flex-wrap:wrap; gap:16px;
+  }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand-mark{
+    width:38px; height:38px; border-radius:9px;
+    background:linear-gradient(155deg,#2B5FD9,#18212F);
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-family:'Space Grotesk'; font-weight:700; font-size:15px; flex-shrink:0;
+  }
+  .brand h1{ font-family:'Space Grotesk'; font-weight:700; font-size:19px; margin:0; letter-spacing:-0.01em; }
+  .brand p{ margin:1px 0 0; font-size:12.5px; color:var(--muted); }
+  .who{ display:flex; align-items:center; gap:12px; font-size:12.5px; color:var(--muted); }
+  .who button.link{ background:none; border:none; color:var(--accent); cursor:pointer; font-size:12.5px; font-family:inherit; padding:0; }
+
+  /* ---- Metrics strip ---- */
+  .metrics{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
+  .metric{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+  .metric .num{ font-family:'Space Grotesk'; font-size:24px; font-weight:700; }
+  .metric .label{ font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-top:2px; }
+  .metric.pending .num{ color:var(--pending); }
+  .metric.entered .num{ color:var(--entered); }
+
+  /* ---- Filter bar ---- */
+  .filterbar{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:14px 16px; margin-bottom:18px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;
+  }
+  .field{ display:flex; flex-direction:column; gap:4px; }
+  .field label{ font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:600; }
+  .field input, .field select{
+    border:1px solid var(--border); border-radius:8px; padding:7px 10px; font-size:13.5px;
+    font-family:inherit; background:#fff; color:var(--ink); min-width:150px;
+  }
+  .field.grow{ flex:1; min-width:180px; }
+  .status-seg{ display:flex; background:#EEF1F5; border-radius:8px; padding:3px; gap:2px; }
+  .status-seg button{
+    border:none; background:none; padding:7px 13px; border-radius:6px; font-size:13px; font-weight:600;
+    color:var(--muted); cursor:pointer; font-family:inherit;
+  }
+  .status-seg button.active{ background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(24,33,47,.12); }
+
+  /* ---- Gallery ---- */
+  .gallery{ display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:14px 16px 15px; position:relative; border-left:4px solid var(--pending);
+    transition:box-shadow .15s;
+  }
+  .card:hover{ box-shadow:0 3px 14px rgba(24,33,47,.08); }
+  .card.status-entered{ border-left-color:var(--entered); opacity:.8; }
+
+  .card-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .client-code{
+    font-family:'IBM Plex Mono'; font-size:11.5px; background:#EEF1F5; color:var(--muted);
+    padding:2px 7px; border-radius:5px; letter-spacing:.02em;
+  }
+  .status-pill{ font-size:11px; font-weight:700; border-radius:12px; padding:3px 10px; white-space:nowrap; }
+  .status-pill.pending{ background:var(--pending-bg); color:var(--pending); }
+  .status-pill.entered{ background:var(--entered-bg); color:var(--entered); }
+
+  .card h3{ font-size:15px; margin:8px 0 1px; font-family:'Space Grotesk'; font-weight:600; }
+  .vendor{ font-size:12.5px; color:var(--muted); margin:0 0 10px; }
+
+  .card-row{ display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:3px; }
+  .card-row span:first-child{ color:var(--muted); }
+  .card-row span:last-child{ font-weight:600; font-family:'IBM Plex Mono'; font-size:12px; }
+
+  .notes{
+    font-size:12px; color:var(--muted); margin:10px 0 0; padding:8px 10px; background:#F7F8FA;
+    border-radius:8px; font-style:italic; line-height:1.4;
+  }
+  .instructions{
+    font-size:12px; color:var(--muted); margin:6px 0 0; padding:8px 10px; background:#F7F8FA;
+    border-radius:8px; line-height:1.4;
+  }
+  .instructions b{ color:var(--ink); font-style:normal; font-weight:600; }
+
+  .card-actions{ display:flex; gap:8px; align-items:center; margin-top:11px; flex-wrap:wrap; }
+  .card-actions input[type="text"]{
+    flex:1 1 160px; padding:6px 8px; border:1px solid var(--border); border-radius:7px; font-size:12.5px; font-family:inherit;
+  }
+  .card-actions button.save{
+    background:var(--ink); color:#fff; border:none; padding:6px 12px; border-radius:7px;
+    font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
+  .card-footer{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
+  .keystone-link{
+    font-size:11.5px; font-weight:600; color:var(--accent); text-decoration:none; cursor:pointer;
+    display:flex; align-items:center; gap:4px; background:none; border:none; font-family:inherit; padding:0;
+  }
+  .keystone-link:hover{ text-decoration:underline; }
+  .save-status{ font-size:11px; color:var(--muted); }
+
+  .empty-state, .loading-state{ text-align:center; padding:50px 20px; color:var(--muted); font-size:13.5px; grid-column:1/-1; }
+</style>
+</head>
+<body>
+
+  <div id="signinScreen">
+    <div class="card">
+      <h1>Alerts App</h1>
+      <p>Sign in with your muc-corp.com account to view today's alerts.</p>
+      <button class="primary" id="loginBtn">Sign in</button>
+    </div>
+  </div>
+
+  <div class="app" id="app">
+
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark">A</div>
+        <div>
+          <h1>Alerts App</h1>
+          <p>gallery view · Muc-corp</p>
+        </div>
+      </div>
+      <div class="who">
+        <span id="whoLabel"></span>
+        <button class="link" id="logoutBtn">Sign out</button>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric pending"><div class="num" id="metricPending">–</div><div class="label">Pending</div></div>
+      <div class="metric entered"><div class="num" id="metricEntered">–</div><div class="label">Entered</div></div>
+      <div class="metric"><div class="num" id="metricTotal">–</div><div class="label">Total today</div></div>
+    </div>
+
+    <div class="filterbar">
+      <div class="field grow">
+        <label>Client code</label>
+        <input type="text" id="clientSearch" placeholder="Starts with…">
+      </div>
+      <div class="field">
+        <label>Vendor</label>
+        <select id="vendorSelect"><option>All vendors</option></select>
+      </div>
+      <div class="field">
+        <label>Status</label>
+        <div class="status-seg" id="statusSeg">
+          <button data-status="Active" class="active">Active</button>
+          <button data-status="Entered">Entered</button>
+          <button data-status="All">All</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="gallery" id="gallery"></div>
+
+  </div>
+
+<script>
+  const CLIENT_ID = "6b04b1f9-b1d4-4366-aa47-12cbd7b9cd27";
+  const TENANT_ID = "551cddfb-5bb5-4a53-aec6-063057585725";
+  const API_SCOPE = `api://${CLIENT_ID}/access_as_user`;
+  const BASE_URL = "https://alerts-functions-hpb5bfeah5fwe4df.eastus-01.azurewebsites.net/api";
+
+  const msalConfig = {
+    auth: {
+      clientId: CLIENT_ID,
+      authority: `https://login.microsoftonline.com/${TENANT_ID}`,
+      redirectUri: window.location.origin + window.location.pathname
+    },
+    cache: { cacheLocation: "sessionStorage" }
+  };
+  const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+  let statusFilter = "Active";
+  let clientSearchDebounce = null;
+
+  function setViewState(signedIn) {
+    document.getElementById("signinScreen").style.display = signedIn ? "none" : "flex";
+    document.getElementById("app").style.display = signedIn ? "block" : "none";
+  }
+
+  async function getToken() {
+    const account = msalInstance.getActiveAccount();
+    const res = await msalInstance.acquireTokenSilent({ scopes: [API_SCOPE], account });
+    return res.accessToken;
+  }
+
+  async function callApi(path, options = {}) {
+    const token = await getToken();
+    const res = await fetch(BASE_URL + path, {
+      ...options,
+      headers: {
+        "Authorization": "Bearer " + token,
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(options.headers || {})
+      }
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`${res.status}: ${text}`);
+    }
+    return res.json();
+  }
+
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return "";
+    return String(str).replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  function displayNote(latest, fallback) {
+    const val = latest || fallback;
+    if (!val) return "";
+    if (val.trim().startsWith("{")) return "(see account details)";
+    return val;
+  }
+
+  function keystoneUrl(alert) {
+    const p = new URLSearchParams({
+      account_number: alert.account_number || "",
+      utility_company: alert.vendor || "",
+      client_name: alert.client_name || ""
+    });
+    return "https://keystone-muc.up.railway.app/accounts/detail?" + p.toString();
+  }
+
+  function renderCard(alert) {
+    const isEntered = !!alert.entered;
+    const notes = displayNote(alert.latest_account_note, alert.alert_notes);
+    const instructions = alert.account_instructions ? escapeHtml(alert.account_instructions) : "";
+
+    return `
+      <div class="card ${isEntered ? "status-entered" : ""}" data-id="${alert.id}">
+        <div class="card-top">
+          <span class="client-code">${escapeHtml(alert.client_code)}</span>
+          <div class="status-pill ${isEntered ? "entered" : "pending"}">${isEntered ? "Entered" : "Pending"}</div>
+        </div>
+        <h3>${escapeHtml(alert.client_name)}</h3>
+        <p class="vendor">${escapeHtml(alert.vendor)}</p>
+
+        <div class="card-row"><span>Account</span><span>${escapeHtml(alert.account_number)}</span></div>
+        <div class="card-row"><span>Billing</span><span>${escapeHtml(alert.billing_period)}</span></div>
+        <div class="card-row"><span>Last bill</span><span>${escapeHtml(alert.last_bill_date) || "—"}</span></div>
+        <div class="card-row"><span>Due</span><span>${escapeHtml(alert.last_bill_due_date) || "—"}</span></div>
+
+        ${notes ? `<div class="notes">${escapeHtml(notes)}</div>` : ""}
+        ${instructions ? `<div class="instructions"><b>Instructions:</b> ${instructions}</div>` : ""}
+
+        <div class="card-actions">
+          <input type="text" class="notesInput" placeholder="Add a note…" value="${escapeHtml(alert.alert_notes || "")}">
+          <button class="save saveNoteBtn">Save</button>
+        </div>
+        <div class="card-footer">
+          <button class="keystone-link" onclick="window.open('${keystoneUrl(alert)}', '_blank')">→ Open in Keystone</button>
+          <span class="save-status"></span>
+        </div>
+      </div>
+    `;
+  }
+
+  async function loadMetrics() {
+    try {
+      const m = await callApi("/metrics");
+      document.getElementById("metricPending").textContent = m.pending_count;
+      document.getElementById("metricEntered").textContent = m.entered_count;
+      document.getElementById("metricTotal").textContent = m.total_count;
+    } catch (e) {
+      console.error("metrics failed", e);
+    }
+  }
+
+  async function loadVendors() {
+    try {
+      const vendors = await callApi("/vendors");
+      const select = document.getElementById("vendorSelect");
+      select.innerHTML = '<option>All vendors</option>' +
+        vendors.map(v => `<option>${escapeHtml(v)}</option>`).join("");
+    } catch (e) {
+      console.error("vendors failed", e);
+    }
+  }
+
+  async function loadAlerts() {
+    const gallery = document.getElementById("gallery");
+    gallery.innerHTML = `<div class="loading-state">Loading alerts…</div>`;
+
+    const params = new URLSearchParams();
+    if (statusFilter !== "All") params.set("status", statusFilter);
+    const clientSearch = document.getElementById("clientSearch").value.trim();
+    if (clientSearch) params.set("client_code_search", clientSearch);
+    const vendor = document.getElementById("vendorSelect").value;
+    if (vendor && vendor !== "All vendors") params.set("vendor", vendor);
+
+    try {
+      const alerts = await callApi("/alerts?" + params.toString());
+      if (alerts.length === 0) {
+        gallery.innerHTML = `<div class="empty-state">No alerts match these filters.</div>`;
+        return;
+      }
+      gallery.innerHTML = alerts.map(renderCard).join("");
+    } catch (e) {
+      gallery.innerHTML = `<div class="empty-state">Couldn't load alerts: ${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  document.getElementById("gallery").addEventListener("click", async (e) => {
+    if (!e.target.classList.contains("saveNoteBtn")) return;
+    const card = e.target.closest(".card");
+    const id = card.dataset.id;
+    const input = card.querySelector(".notesInput");
+    const statusEl = card.querySelector(".save-status");
+    statusEl.textContent = "Saving…";
+    try {
+      await callApi(`/alerts/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ alert_notes: input.value })
+      });
+      statusEl.textContent = "Saved";
+      setTimeout(() => { statusEl.textContent = ""; }, 2000);
+    } catch (err) {
+      statusEl.textContent = "Failed to save";
+      console.error(err);
+    }
+  });
+
+  document.getElementById("statusSeg").addEventListener("click", (e) => {
+    if (e.target.tagName !== "BUTTON") return;
+    statusFilter = e.target.dataset.status;
+    document.querySelectorAll("#statusSeg button").forEach(b => b.classList.remove("active"));
+    e.target.classList.add("active");
+    loadAlerts();
+  });
+
+  document.getElementById("vendorSelect").addEventListener("change", loadAlerts);
+
+  document.getElementById("clientSearch").addEventListener("input", () => {
+    clearTimeout(clientSearchDebounce);
+    clientSearchDebounce = setTimeout(loadAlerts, 350);
+  });
+
+  document.getElementById("loginBtn").addEventListener("click", () => {
+    msalInstance.loginRedirect({ scopes: [API_SCOPE] });
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    msalInstance.logoutRedirect();
+  });
+
+  async function init() {
+    await msalInstance.initialize();
+    const result = await msalInstance.handleRedirectPromise().catch(console.error);
+    const account = result?.account || msalInstance.getAllAccounts()[0];
+
+    if (!account) {
+      setViewState(false);
+      return;
+    }
+    msalInstance.setActiveAccount(account);
+    setViewState(true);
+    document.getElementById("whoLabel").textContent = account.username;
+
+    await Promise.all([loadMetrics(), loadVendors()]);
+    await loadAlerts();
+  }
+
+  init();
+</script>
+</body>
+</html>
