@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Alerts App — Auth Test</title>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 600px; margin: 60px auto; color: #1a1a1a; }
+  button { padding: 10px 18px; font-size: 15px; cursor: pointer; border-radius: 6px; border: 1px solid #ccc; background: #f5f5f5; }
+  button:hover { background: #ececec; }
+  #status { margin-top: 24px; padding: 16px; border-radius: 8px; background: #f0f4ff; }
+  #status.error { background: #fdeeee; }
+  pre { white-space: pre-wrap; word-break: break-all; font-size: 13px; }
+</style>
+</head>
+<body>
+  <h2>Alerts App — Auth Test</h2>
+  <p>Confirms Entra SSO login works before wiring up the real app.</p>
+
+  <button id="loginBtn">Sign in</button>
+  <button id="logoutBtn" style="display:none;">Sign out</button>
+  <button id="callApiBtn" style="display:none;">Call whoami API</button>
+  <button id="callVendorsBtn" style="display:none;">Call vendors API</button>
+  <button id="callAlertsBtn" style="display:none;">Call alerts API</button>
+  <button id="callMetricsBtn" style="display:none;">Call metrics API</button>
+
+  <div id="patchForm" style="display:none; margin-top:20px; padding:16px; border:1px solid #ddd; border-radius:8px;">
+    <div style="margin-bottom:8px;">
+      <label>Alert ID: <input type="text" id="patchAlertId" placeholder="e.g. 64880" /></label>
+    </div>
+    <div style="margin-bottom:8px;">
+      <label>alert_notes: <input type="text" id="patchNotes" placeholder="test note" style="width:250px;" /></label>
+    </div>
+    <button id="callPatchBtn">Send PATCH</button>
+  </div>
+
+  <div id="status" style="display:none;"></div>
+  <div id="apiResult" style="display:none; margin-top:16px; padding:16px; border-radius:8px; background:#eefbf0;"></div>
+
+  <script>
+    const msalConfig = {
+      auth: {
+        clientId: "6b04b1f9-b1d4-4366-aa47-12cbd7b9cd27",
+        authority: "https://login.microsoftonline.com/551cddfb-5bb5-4a53-aec6-063057585725",
+        redirectUri: window.location.origin + window.location.pathname
+      },
+      cache: {
+        cacheLocation: "sessionStorage"
+      }
+    };
+
+    const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+    const loginBtn = document.getElementById("loginBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const callApiBtn = document.getElementById("callApiBtn");
+    const callVendorsBtn = document.getElementById("callVendorsBtn");
+    const callAlertsBtn = document.getElementById("callAlertsBtn");
+    const callMetricsBtn = document.getElementById("callMetricsBtn");
+    const statusDiv = document.getElementById("status");
+
+    function showStatus(html, isError = false) {
+      statusDiv.style.display = "block";
+      statusDiv.className = isError ? "error" : "";
+      statusDiv.innerHTML = html;
+    }
+
+    async function init() {
+      await msalInstance.initialize();
+      const result = await msalInstance.handleRedirectPromise().catch(err => {
+        showStatus("Redirect error: " + err.message, true);
+      });
+
+      const account = result?.account || msalInstance.getAllAccounts()[0];
+      if (account) {
+        msalInstance.setActiveAccount(account);
+        showLoggedIn(account);
+      }
+    }
+
+    function showLoggedIn(account) {
+      loginBtn.style.display = "none";
+      logoutBtn.style.display = "inline-block";
+      callApiBtn.style.display = "inline-block";
+      callVendorsBtn.style.display = "inline-block";
+      callAlertsBtn.style.display = "inline-block";
+      callMetricsBtn.style.display = "inline-block";
+      document.getElementById("patchForm").style.display = "block";
+      showStatus(
+        "<strong>Signed in</strong><br>" +
+        "Name: " + account.name + "<br>" +
+        "Email (username): " + account.username + "<br>" +
+        "<pre>" + JSON.stringify(account.idTokenClaims, null, 2) + "</pre>"
+      );
+    }
+
+    const API_SCOPE = "api://6b04b1f9-b1d4-4366-aa47-12cbd7b9cd27/access_as_user";
+    const BASE_URL = "https://alerts-functions-hpb5bfeah5fwe4df.eastus-01.azurewebsites.net/api";
+
+    async function callApi(endpointPath) {
+      const apiResultDiv = document.getElementById("apiResult");
+      apiResultDiv.style.display = "block";
+      apiResultDiv.innerHTML = "Calling " + endpointPath + "...";
+
+      try {
+        const account = msalInstance.getActiveAccount();
+        const tokenResponse = await msalInstance.acquireTokenSilent({
+          scopes: [API_SCOPE],
+          account: account
+        });
+
+        const response = await fetch(BASE_URL + "/" + endpointPath, {
+          headers: {
+            "Authorization": "Bearer " + tokenResponse.accessToken
+          }
+        });
+
+        const data = await response.json();
+        apiResultDiv.innerHTML = "<strong>" + endpointPath + " response (status " + response.status + ")</strong><pre>" + JSON.stringify(data, null, 2) + "</pre>";
+      } catch (err) {
+        apiResultDiv.innerHTML = "<strong>Error:</strong> " + err.message;
+        if (err.name === "InteractionRequiredAuthError") {
+          apiResultDiv.innerHTML += "<br>Need interactive consent for this scope — try loginRedirect with the API scope instead.";
+        }
+      }
+    }
+
+    document.getElementById("callApiBtn").addEventListener("click", () => callApi("whoami"));
+    document.getElementById("callVendorsBtn").addEventListener("click", () => callApi("vendors"));
+    document.getElementById("callAlertsBtn").addEventListener("click", () => callApi("alerts"));
+    document.getElementById("callMetricsBtn").addEventListener("click", () => callApi("metrics"));
+
+    async function callPatch() {
+      const apiResultDiv = document.getElementById("apiResult");
+      apiResultDiv.style.display = "block";
+
+      const alertId = document.getElementById("patchAlertId").value.trim();
+      const notes = document.getElementById("patchNotes").value;
+
+      if (!alertId) {
+        apiResultDiv.innerHTML = "<strong>Error:</strong> enter an alert ID first.";
+        return;
+      }
+
+      apiResultDiv.innerHTML = "Sending PATCH...";
+
+      try {
+        const account = msalInstance.getActiveAccount();
+        const tokenResponse = await msalInstance.acquireTokenSilent({
+          scopes: [API_SCOPE],
+          account: account
+        });
+
+        const response = await fetch(BASE_URL + "/alerts/" + encodeURIComponent(alertId), {
+          method: "PATCH",
+          headers: {
+            "Authorization": "Bearer " + tokenResponse.accessToken,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ alert_notes: notes })
+        });
+
+        const data = await response.json();
+        apiResultDiv.innerHTML = "<strong>PATCH response (status " + response.status + ")</strong><pre>" + JSON.stringify(data, null, 2) + "</pre>";
+      } catch (err) {
+        apiResultDiv.innerHTML = "<strong>Error:</strong> " + err.message;
+      }
+    }
+
+    document.getElementById("callPatchBtn").addEventListener("click", callPatch);
+
+    loginBtn.addEventListener("click", () => {
+      msalInstance.loginRedirect({ scopes: ["User.Read"] });
+    });
+
+    logoutBtn.addEventListener("click", () => {
+      msalInstance.logoutRedirect();
+    });
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alerts App</title>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
+<style>
+  :root {
+    --brand: #0f4c81;
+    --brand-dark: #0b3a63;
+    --bg: #eef1f5;
+    --surface: #ffffff;
+    --border: #d7dce3;
+    --text: #1b1f24;
+    --text-2: #5a6472;
+    --text-3: #94a0ae;
+    --pending-bg: #fdf1d7;
+    --pending-fg: #8a5a00;
+    --entered-bg: #ddf0dd;
+    --entered-fg: #1e6b2e;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  /* ---- Sign-in gate ---- */
+  #signinScreen {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  }
+  #signinScreen .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 40px; text-align: center; box-shadow: 0 2px 12px rgba(20,40,70,0.08);
+  }
+  #signinScreen h1 { font-size: 20px; margin-bottom: 8px; }
+  #signinScreen p { color: var(--text-2); margin-bottom: 20px; font-size: 14px; }
+  button.primary {
+    background: var(--brand); color: white; border: none; padding: 10px 20px;
+    border-radius: 8px; font-size: 14px; cursor: pointer;
+  }
+  button.primary:hover { background: var(--brand-dark); }
+
+  /* ---- App shell ---- */
+  #app { display: none; max-width: 900px; margin: 0 auto; padding: 20px 16px 60px; }
+
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 4px 20px;
+  }
+  .topbar .title { font-size: 20px; font-weight: 600; }
+  .topbar .subtitle { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+  .topbar .who { font-size: 12px; color: var(--text-2); display: flex; align-items: center; gap: 12px; }
+  .topbar button.link {
+    background: none; border: none; color: var(--brand); cursor: pointer; font-size: 12px; padding: 0;
+  }
+
+  /* ---- Metrics tiles ---- */
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; text-align: center;
+  }
+  .tile .num { font-size: 26px; font-weight: 700; }
+  .tile .label { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+  .tile.pending .num { color: var(--pending-fg); }
+  .tile.entered .num { color: var(--entered-fg); }
+
+  /* ---- Filter bar ---- */
+  .filterbar {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px;
+  }
+  .filterbar input[type="text"], .filterbar select {
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px;
+    background: var(--bg);
+  }
+  .filterbar input[type="text"] { flex: 1 1 160px; min-width: 140px; }
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button {
+    border: none; background: var(--surface); padding: 8px 14px; font-size: 13px; cursor: pointer;
+    color: var(--text-2);
+  }
+  .seg button.active { background: var(--brand); color: white; font-weight: 600; }
+  .seg button + button { border-left: 1px solid var(--border); }
+
+  /* ---- Gallery ---- */
+  #gallery { display: flex; flex-direction: column; gap: 10px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; position: relative;
+  }
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .badge {
+    display: inline-block; font-size: 11px; font-weight: 700; color: var(--brand);
+    background: #e7edf5; border-radius: 5px; padding: 2px 7px; margin-bottom: 4px;
+  }
+  .card-title { font-size: 15px; font-weight: 600; }
+  .card-sub { font-size: 13px; color: var(--text-2); margin-top: 1px; }
+  .status-pill {
+    font-size: 11px; font-weight: 700; border-radius: 12px; padding: 3px 10px; white-space: nowrap;
+  }
+  .status-pill.pending { background: var(--pending-bg); color: var(--pending-fg); }
+  .status-pill.entered { background: var(--entered-bg); color: var(--entered-fg); }
+
+  .card-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 6px 16px; margin-top: 10px; font-size: 12.5px;
+  }
+  .card-grid .k { color: var(--text-3); }
+  .card-grid .v { color: var(--text); }
+
+  .notes-block { margin-top: 10px; font-size: 12px; color: var(--text-2); }
+  .notes-block .lbl { color: var(--text-3); font-weight: 600; }
+  .instructions-block { margin-top: 4px; font-size: 12px; color: var(--text-2); }
+
+  .card-actions { margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .card-actions input[type="text"] {
+    flex: 1 1 200px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12.5px;
+  }
+  .card-actions button {
+    background: var(--brand); color: white; border: none; padding: 6px 12px;
+    border-radius: 6px; font-size: 12px; cursor: pointer;
+  }
+  .card-actions button.keystone { background: var(--surface); color: var(--brand); border: 1px solid var(--brand); }
+  .save-status { font-size: 11px; color: var(--text-3); }
+
+  .empty-state, .loading-state {
+    text-align: center; padding: 40px 20px; color: var(--text-3); font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+  <div id="signinScreen">
+    <div class="card">
+      <h1>Alerts App</h1>
+      <p>Sign in with your muc-corp.com account to view today's alerts.</p>
+      <button class="primary" id="loginBtn">Sign in</button>
+    </div>
+  </div>
+
+  <div id="app">
+    <div class="topbar">
+      <div>
+        <div class="title">Alerts App</div>
+        <div class="subtitle">Today's alerts</div>
+      </div>
+      <div class="who">
+        <span id="whoLabel"></span>
+        <button class="link" id="logoutBtn">Sign out</button>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div class="tile pending"><div class="num" id="metricPending">–</div><div class="label">Pending</div></div>
+      <div class="tile entered"><div class="num" id="metricEntered">–</div><div class="label">Entered</div></div>
+      <div class="tile"><div class="num" id="metricTotal">–</div><div class="label">Total today</div></div>
+    </div>
+
+    <div class="filterbar">
+      <input type="text" id="clientSearch" placeholder="Client code…">
+      <select id="vendorSelect"><option>All vendors</option></select>
+      <div class="seg" id="statusSeg">
+        <button data-status="Active" class="active">Active</button>
+        <button data-status="Entered">Entered</button>
+        <button data-status="All">All</button>
+      </div>
+    </div>
+
+    <div id="gallery"></div>
+  </div>
+
+<script>
+  const CLIENT_ID = "6b04b1f9-b1d4-4366-aa47-12cbd7b9cd27";
+  const TENANT_ID = "551cddfb-5bb5-4a53-aec6-063057585725";
+  const API_SCOPE = `api://${CLIENT_ID}/access_as_user`;
+  const BASE_URL = "https://alerts-functions-hpb5bfeah5fwe4df.eastus-01.azurewebsites.net/api";
+
+  const msalConfig = {
+    auth: {
+      clientId: CLIENT_ID,
+      authority: `https://login.microsoftonline.com/${TENANT_ID}`,
+      redirectUri: window.location.origin + window.location.pathname
+    },
+    cache: { cacheLocation: "sessionStorage" }
+  };
+  const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+  let statusFilter = "Active";
+  let clientSearchDebounce = null;
+
+  function setViewState(signedIn) {
+    document.getElementById("signinScreen").style.display = signedIn ? "none" : "flex";
+    document.getElementById("app").style.display = signedIn ? "block" : "none";
+  }
+
+  async function getToken() {
+    const account = msalInstance.getActiveAccount();
+    const res = await msalInstance.acquireTokenSilent({ scopes: [API_SCOPE], account });
+    return res.accessToken;
+  }
+
+  async function callApi(path, options = {}) {
+    const token = await getToken();
+    const res = await fetch(BASE_URL + path, {
+      ...options,
+      headers: {
+        "Authorization": "Bearer " + token,
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(options.headers || {})
+      }
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`${res.status}: ${text}`);
+    }
+    return res.json();
+  }
+
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return "";
+    return String(str).replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  function displayNote(latest, fallback) {
+    const val = latest || fallback;
+    if (!val) return "";
+    if (val.trim().startsWith("{")) return "(see account details)";
+    return val;
+  }
+
+  function keystoneUrl(alert) {
+    const p = new URLSearchParams({
+      account_number: alert.account_number || "",
+      utility_company: alert.vendor || "",
+      client_name: alert.client_name || ""
+    });
+    return "https://keystone-muc.up.railway.app/accounts/detail?" + p.toString();
+  }
+
+  function renderCard(alert) {
+    const isEntered = !!alert.entered;
+    const notes = displayNote(alert.latest_account_note, alert.alert_notes);
+    const instructions = alert.account_instructions ? escapeHtml(alert.account_instructions) : "";
+
+    return `
+      <div class="card" data-id="${alert.id}">
+        <div class="card-top">
+          <div>
+            <div class="badge">${escapeHtml(alert.client_code)}</div>
+            <div class="card-title">${escapeHtml(alert.client_name)}</div>
+            <div class="card-sub">${escapeHtml(alert.vendor)}</div>
+          </div>
+          <div class="status-pill ${isEntered ? "entered" : "pending"}">${isEntered ? "Entered" : "Pending"}</div>
+        </div>
+
+        <div class="card-grid">
+          <div><span class="k">Account: </span><span class="v">${escapeHtml(alert.account_number)}</span></div>
+          <div><span class="k">Billing: </span><span class="v">${escapeHtml(alert.billing_period)}</span></div>
+          <div><span class="k">Last bill: </span><span class="v">${escapeHtml(alert.last_bill_date) || "—"}</span></div>
+          <div><span class="k">Due: </span><span class="v">${escapeHtml(alert.last_bill_due_date) || "—"}</span></div>
+        </div>
+
+        ${notes ? `<div class="notes-block"><span class="lbl">Notes: </span>${escapeHtml(notes)}</div>` : ""}
+        ${instructions ? `<div class="instructions-block"><span class="lbl">Instructions: </span>${instructions}</div>` : ""}
+
+        <div class="card-actions">
+          <input type="text" class="notesInput" placeholder="Add a note…" value="${escapeHtml(alert.alert_notes || "")}">
+          <button class="saveNoteBtn">Save note</button>
+          <button class="keystone" onclick="window.open('${keystoneUrl(alert)}', '_blank')">Open in Keystone</button>
+          <span class="save-status"></span>
+        </div>
+      </div>
+    `;
+  }
+
+  async function loadMetrics() {
+    try {
+      const m = await callApi("/metrics");
+      document.getElementById("metricPending").textContent = m.pending_count;
+      document.getElementById("metricEntered").textContent = m.entered_count;
+      document.getElementById("metricTotal").textContent = m.total_count;
+    } catch (e) {
+      console.error("metrics failed", e);
+    }
+  }
+
+  async function loadVendors() {
+    try {
+      const vendors = await callApi("/vendors");
+      const select = document.getElementById("vendorSelect");
+      select.innerHTML = '<option>All vendors</option>' +
+        vendors.map(v => `<option>${escapeHtml(v)}</option>`).join("");
+    } catch (e) {
+      console.error("vendors failed", e);
+    }
+  }
+
+  async function loadAlerts() {
+    const gallery = document.getElementById("gallery");
+    gallery.innerHTML = `<div class="loading-state">Loading alerts…</div>`;
+
+    const params = new URLSearchParams();
+    if (statusFilter !== "All") params.set("status", statusFilter);
+    const clientSearch = document.getElementById("clientSearch").value.trim();
+    if (clientSearch) params.set("client_code_search", clientSearch);
+    const vendor = document.getElementById("vendorSelect").value;
+    if (vendor && vendor !== "All vendors") params.set("vendor", vendor);
+
+    try {
+      const alerts = await callApi("/alerts?" + params.toString());
+      if (alerts.length === 0) {
+        gallery.innerHTML = `<div class="empty-state">No alerts match these filters.</div>`;
+        return;
+      }
+      gallery.innerHTML = alerts.map(renderCard).join("");
+    } catch (e) {
+      gallery.innerHTML = `<div class="empty-state">Couldn't load alerts: ${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  document.getElementById("gallery").addEventListener("click", async (e) => {
+    if (!e.target.classList.contains("saveNoteBtn")) return;
+    const card = e.target.closest(".card");
+    const id = card.dataset.id;
+    const input = card.querySelector(".notesInput");
+    const statusEl = card.querySelector(".save-status");
+    statusEl.textContent = "Saving…";
+    try {
+      await callApi(`/alerts/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ alert_notes: input.value })
+      });
+      statusEl.textContent = "Saved";
+      setTimeout(() => { statusEl.textContent = ""; }, 2000);
+    } catch (err) {
+      statusEl.textContent = "Failed to save";
+      console.error(err);
+    }
+  });
+
+  document.getElementById("statusSeg").addEventListener("click", (e) => {
+    if (e.target.tagName !== "BUTTON") return;
+    statusFilter = e.target.dataset.status;
+    document.querySelectorAll("#statusSeg button").forEach(b => b.classList.remove("active"));
+    e.target.classList.add("active");
+    loadAlerts();
+  });
+
+  document.getElementById("vendorSelect").addEventListener("change", loadAlerts);
+
+  document.getElementById("clientSearch").addEventListener("input", () => {
+    clearTimeout(clientSearchDebounce);
+    clientSearchDebounce = setTimeout(loadAlerts, 350);
+  });
+
+  document.getElementById("loginBtn").addEventListener("click", () => {
+    msalInstance.loginRedirect({ scopes: [API_SCOPE] });
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    msalInstance.logoutRedirect();
+  });
+
+  async function init() {
+    await msalInstance.initialize();
+    const result = await msalInstance.handleRedirectPromise().catch(console.error);
+    const account = result?.account || msalInstance.getAllAccounts()[0];
+
+    if (!account) {
+      setViewState(false);
+      return;
+    }
+    msalInstance.setActiveAccount(account);
+    setViewState(true);
+    document.getElementById("whoLabel").textContent = account.username;
+
+    await Promise.all([loadMetrics(), loadVendors()]);
+    await loadAlerts();
+  }
+
+  init();
+</script>
+</body>
+</html>
