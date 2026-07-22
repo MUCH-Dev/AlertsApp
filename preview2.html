@@ -16,6 +16,8 @@
     --border:#E3E8EF;
     --pending:#C2760C;
     --pending-bg:#FDF3E3;
+    --pulled:#2B5FD9;
+    --pulled-bg:#EAF0FE;
     --entered:#0E8F79;
     --entered-bg:#E4F6F1;
     --accent:#2B5FD9;
@@ -63,11 +65,12 @@
   .who button.link{ background:none; border:none; color:var(--accent); cursor:pointer; font-size:12.5px; font-family:inherit; padding:0; }
 
   /* ---- Metrics strip ---- */
-  .metrics{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
+  .metrics{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
   .metric{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
   .metric .num{ font-family:'Space Grotesk'; font-size:24px; font-weight:700; }
   .metric .label{ font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-top:2px; }
   .metric.pending .num{ color:var(--pending); }
+  .metric.pulled .num{ color:var(--pulled); }
   .metric.entered .num{ color:var(--entered); }
 
   /* ---- Filter bar ---- */
@@ -97,6 +100,7 @@
     transition:box-shadow .15s; cursor:pointer;
   }
   .card:hover{ box-shadow:0 3px 14px rgba(24,33,47,.08); }
+  .card.status-pulled{ border-left-color:var(--pulled); }
   .card.status-entered{ border-left-color:var(--entered); opacity:.8; }
 
   .card-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
@@ -106,6 +110,7 @@
   }
   .status-pill{ font-size:11px; font-weight:700; border-radius:12px; padding:3px 10px; white-space:nowrap; }
   .status-pill.pending{ background:var(--pending-bg); color:var(--pending); }
+  .status-pill.pulled{ background:var(--pulled-bg); color:var(--pulled); }
   .status-pill.entered{ background:var(--entered-bg); color:var(--entered); }
 
   .card h3{ font-size:15px; margin:8px 0 1px; font-family:'Space Grotesk'; font-weight:600; }
@@ -259,6 +264,7 @@
 
     <div class="metrics">
       <div class="metric pending"><div class="num" id="metricPending">–</div><div class="label">Pending</div></div>
+      <div class="metric pulled"><div class="num" id="metricPulled">–</div><div class="label">Bill Pulled</div></div>
       <div class="metric entered"><div class="num" id="metricEntered">–</div><div class="label">Entered</div></div>
       <div class="metric"><div class="num" id="metricTotal">–</div><div class="label">Total today</div></div>
     </div>
@@ -373,17 +379,23 @@
     return "https://keystone-muc.up.railway.app/accounts/detail?" + p.toString();
   }
 
+  function statusInfo(alert) {
+    if (alert.entered) return { cls: "entered", label: "Entered" };
+    if (alert.bill_pulled) return { cls: "pulled", label: "Bill Pulled" };
+    return { cls: "pending", label: "Pending" };
+  }
+
   function renderCard(alert) {
-    const isEntered = !!alert.entered;
+    const status = statusInfo(alert);
 
     return `
-      <div class="card ${isEntered ? "status-entered" : ""}" data-id="${alert.id}">
+      <div class="card status-${status.cls}" data-id="${alert.id}">
         <div class="card-top">
           <span>
             <input type="checkbox" class="card-check" data-id="${alert.id}">
             <span class="client-code">${escapeHtml(alert.client_code)}</span>
           </span>
-          <div class="status-pill ${isEntered ? "entered" : "pending"}">${isEntered ? "Entered" : "Pending"}</div>
+          <div class="status-pill ${status.cls}">${status.label}</div>
         </div>
         <h3>${escapeHtml(alert.client_name)}</h3>
         <p class="vendor">${escapeHtml(alert.vendor)}</p>
@@ -398,6 +410,7 @@
     try {
       const m = await callApi("/metrics");
       document.getElementById("metricPending").textContent = m.pending_count;
+      document.getElementById("metricPulled").textContent = m.pulled_count;
       document.getElementById("metricEntered").textContent = m.entered_count;
       document.getElementById("metricTotal").textContent = m.total_count;
     } catch (e) {
@@ -508,7 +521,7 @@
   });
 
   function renderModal(alert) {
-    const isEntered = !!alert.entered;
+    const status = statusInfo(alert);
     const instructions = alert.account_instructions ? escapeHtml(alert.account_instructions) : "";
 
     return `
@@ -516,7 +529,7 @@
         <h2>${escapeHtml(alert.client_name)}</h2>
         <button class="modal-close" id="modalCloseBtn">&times;</button>
       </div>
-      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · <span class="status-pill ${isEntered ? "entered" : "pending"}">${isEntered ? "Entered" : "Pending"}</span></div>
+      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · <span class="status-pill ${status.cls}">${status.label}</span></div>
 
       <div class="modal-grid">
         <div><div class="k">Account number</div><div class="v">${escapeHtml(alert.account_number)}</div></div>
@@ -530,6 +543,11 @@
       </div>
 
       ${instructions ? `<div class="modal-field"><label>Account instructions</label><div class="modal-readonly">${instructions}</div></div>` : ""}
+
+      <div class="modal-field">
+        <label><input type="checkbox" id="modalBillPulledInput" ${alert.bill_pulled ? "checked" : ""} ${alert.entered ? "disabled" : ""}> Bill pulled</label>
+        ${alert.entered ? `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;">Already entered — bill pulled status no longer applies.</div>` : ""}
+      </div>
 
       <div class="modal-field">
         <label>Notes</label>
@@ -561,6 +579,8 @@
       const statusEl = document.getElementById("modalSaveStatus");
       const notes = document.getElementById("modalNotesInput").value;
       const assignedTo = document.getElementById("modalAssignedInput").value.trim();
+      const billPulledEl = document.getElementById("modalBillPulledInput");
+      const billPulled = billPulledEl.disabled ? alert.bill_pulled : billPulledEl.checked;
 
       statusEl.textContent = "Saving…";
       try {
@@ -569,7 +589,8 @@
           body: JSON.stringify({
             alert_notes: notes,
             assigned_to: assignedTo || null,
-            assigned_at: assignedTo ? new Date().toISOString() : null
+            assigned_at: assignedTo ? new Date().toISOString() : null,
+            bill_pulled: billPulled
           })
         });
         statusEl.textContent = "Saved";
