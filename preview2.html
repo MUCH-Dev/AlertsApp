@@ -189,6 +189,39 @@
     background:none; border:1px solid var(--accent); color:var(--accent); padding:9px 16px;
     border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
   }
+
+  /* ---- Lead mode toggle ---- */
+  .lead-toggle{
+    display:flex; align-items:center; gap:9px; background:var(--surface); border:1px solid var(--border);
+    padding:7px 13px; border-radius:9px; font-size:12.5px; font-weight:600; cursor:pointer; user-select:none;
+  }
+  .switch{ position:relative; width:34px; height:19px; flex-shrink:0; }
+  .switch input{ opacity:0; width:0; height:0; }
+  .slider{ position:absolute; inset:0; background:#CBD4E1; border-radius:20px; transition:.15s; }
+  .slider:before{ content:""; position:absolute; width:13px; height:13px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.15s; }
+  .switch input:checked + .slider{ background:var(--accent); }
+  .switch input:checked + .slider:before{ transform:translateX(15px); }
+
+  /* ---- Batch assign bar ---- */
+  .batchbar{
+    display:none; align-items:center; gap:10px; background:var(--ink); color:#fff;
+    border-radius:12px; padding:11px 16px; margin-bottom:16px; font-size:13.5px; flex-wrap:wrap;
+  }
+  .batchbar.show{ display:flex; }
+  .batchbar select, .batchbar input{
+    border:none; border-radius:7px; padding:7px 10px; font-size:13px; font-family:inherit;
+  }
+  .batchbar .assignField{ margin-left:auto; display:flex; gap:8px; align-items:center; }
+  .batchbar button{
+    background:var(--accent); color:#fff; border:none; border-radius:7px; padding:7px 14px;
+    font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
+  .batchbar button:hover{ background:#3a6ef0; }
+  .batchbar button:disabled{ opacity:.5; cursor:not-allowed; }
+
+  .card-check{ display:none; margin-right:6px; }
+  .gallery.lead-mode .card-check{ display:inline-block; }
+  .gallery.lead-mode .card-top{ align-items:center; }
 </style>
 </head>
 <body>
@@ -212,6 +245,13 @@
         </div>
       </div>
       <div class="who">
+        <label class="lead-toggle">
+          <span class="switch">
+            <input type="checkbox" id="leadModeInput">
+            <span class="slider"></span>
+          </span>
+          Team lead view
+        </label>
         <span id="whoLabel"></span>
         <button class="link" id="logoutBtn">Sign out</button>
       </div>
@@ -239,6 +279,14 @@
           <button data-status="Entered">Entered</button>
           <button data-status="All">All</button>
         </div>
+      </div>
+    </div>
+
+    <div class="batchbar" id="batchBar">
+      <strong id="batchCount">0 selected</strong>
+      <div class="assignField">
+        <input type="text" id="batchAssignInput" list="teamMembersList" placeholder="name@muc-corp.com">
+        <button id="batchAssignBtn" disabled>Assign selected</button>
       </div>
     </div>
 
@@ -271,6 +319,8 @@
   let statusFilter = "Active";
   let clientSearchDebounce = null;
   let currentAlerts = [];
+  let leadMode = false;
+  let selectedIds = new Set();
 
   function setViewState(signedIn) {
     document.getElementById("signinScreen").style.display = signedIn ? "none" : "flex";
@@ -329,7 +379,10 @@
     return `
       <div class="card ${isEntered ? "status-entered" : ""}" data-id="${alert.id}">
         <div class="card-top">
-          <span class="client-code">${escapeHtml(alert.client_code)}</span>
+          <span>
+            <input type="checkbox" class="card-check" data-id="${alert.id}">
+            <span class="client-code">${escapeHtml(alert.client_code)}</span>
+          </span>
           <div class="status-pill ${isEntered ? "entered" : "pending"}">${isEntered ? "Entered" : "Pending"}</div>
         </div>
         <h3>${escapeHtml(alert.client_name)}</h3>
@@ -398,10 +451,60 @@
   }
 
   document.getElementById("gallery").addEventListener("click", (e) => {
+    if (e.target.classList.contains("card-check")) {
+      const id = e.target.dataset.id;
+      if (e.target.checked) selectedIds.add(id); else selectedIds.delete(id);
+      updateBatchBar();
+      return;
+    }
     const card = e.target.closest(".card");
     if (!card) return;
     const alert = currentAlerts.find(a => String(a.id) === card.dataset.id);
     if (alert) openModal(alert);
+  });
+
+  function updateBatchBar() {
+    document.getElementById("batchCount").textContent = selectedIds.size + " selected";
+    document.getElementById("batchAssignBtn").disabled = selectedIds.size === 0;
+  }
+
+  document.getElementById("leadModeInput").addEventListener("change", (e) => {
+    leadMode = e.target.checked;
+    document.getElementById("gallery").classList.toggle("lead-mode", leadMode);
+    document.getElementById("batchBar").classList.toggle("show", leadMode);
+    selectedIds.clear();
+    updateBatchBar();
+  });
+
+  document.getElementById("batchAssignBtn").addEventListener("click", async () => {
+    const assignee = document.getElementById("batchAssignInput").value.trim();
+    if (!assignee || selectedIds.size === 0) return;
+
+    const btn = document.getElementById("batchAssignBtn");
+    btn.disabled = true;
+    btn.textContent = "Assigning…";
+
+    const now = new Date().toISOString();
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map(id =>
+          callApi(`/alerts/${id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ assigned_to: assignee, assigned_at: now })
+          })
+        )
+      );
+      selectedIds.clear();
+      document.getElementById("batchAssignInput").value = "";
+      updateBatchBar();
+      btn.textContent = "Assign selected";
+      await loadAlerts();
+    } catch (err) {
+      btn.textContent = "Assign selected";
+      btn.disabled = false;
+      console.error("Batch assign failed", err);
+      alert("Some assignments may have failed. Check console for details.");
+    }
   });
 
   function renderModal(alert) {
