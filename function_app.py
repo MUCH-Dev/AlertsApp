@@ -99,8 +99,9 @@ def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
         query = f"""
             SELECT id, client_code, client_name, alert_type, vendor, account_number,
                    account_name, tax_id, billing_period, payment_method,
-                   account_instructions, latest_account_note, alert_notes, entered,
-                   last_bill_date, last_bill_due_date, assigned_to, assigned_at, v5_account_id
+                   account_instructions, latest_account_note, alert_notes, entered, bill_pulled,
+                   last_bill_date, last_bill_due_date, assigned_to, assigned_at, v5_account_id,
+                   days_since_last_bill, days_alerted
             FROM Alerts
             WHERE load_date = CAST(GETDATE() AS DATE)
               AND client_code IN ({placeholders})
@@ -112,16 +113,21 @@ def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
             query += " AND entered = 0"
         elif status == "Entered":
             query += " AND entered = 1"
+        elif status == "Critical":
+            query += " AND entered = 0 AND days_since_last_bill >= 65"
 
         client_search = req.params.get("client_code_search")
         if client_search:
             query += " AND client_code LIKE ?"
             params.append(client_search + "%")
 
-        vendor = req.params.get("vendor")
-        if vendor and vendor != "All vendors":
-            query += " AND vendor = ?"
-            params.append(vendor)
+        vendor_param = req.params.get("vendor")
+        if vendor_param:
+            vendor_list = [v.strip() for v in vendor_param.split(",") if v.strip()]
+            if vendor_list:
+                vendor_placeholders = ",".join("?" for _ in vendor_list)
+                query += f" AND vendor IN ({vendor_placeholders})"
+                params.extend(vendor_list)
 
         cursor.execute(query, params)
         columns = [col[0] for col in cursor.description]
@@ -157,14 +163,15 @@ def get_metrics(req: func.HttpRequest) -> func.HttpResponse:
         if not rls_codes:
             conn.close()
             return func.HttpResponse(
-                json.dumps({"pending_count": 0, "entered_count": 0, "total_count": 0}),
+                json.dumps({"pending_count": 0, "pulled_count": 0, "entered_count": 0, "total_count": 0}),
                 mimetype="application/json"
             )
 
         placeholders = ",".join("?" for _ in rls_codes)
         query = f"""
             SELECT
-                SUM(CASE WHEN entered = 0 THEN 1 ELSE 0 END) AS pending_count,
+                SUM(CASE WHEN entered = 0 AND bill_pulled = 0 THEN 1 ELSE 0 END) AS pending_count,
+                SUM(CASE WHEN entered = 0 AND days_since_last_bill >= 65 THEN 1 ELSE 0 END) AS critical_count,
                 SUM(CASE WHEN entered = 1 THEN 1 ELSE 0 END) AS entered_count,
                 COUNT(*) AS total_count
             FROM Alerts
@@ -178,6 +185,7 @@ def get_metrics(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(
             json.dumps({
                 "pending_count": row.pending_count or 0,
+                "critical_count": row.critical_count or 0,
                 "entered_count": row.entered_count or 0,
                 "total_count": row.total_count or 0
             }),
@@ -188,7 +196,7 @@ def get_metrics(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(json.dumps({"error": str(e)}), status_code=500, mimetype="application/json")
 
 
-ALLOWED_PATCH_FIELDS = {"alert_notes", "assigned_to", "assigned_at"}
+ALLOWED_PATCH_FIELDS = {"alert_notes", "assigned_to", "assigned_at", "bill_pulled"}
 
 @app.route(route="alerts/{id}", methods=["PATCH"])
 def patch_alert(req: func.HttpRequest) -> func.HttpResponse:
@@ -260,6 +268,45 @@ def patch_alert(req: func.HttpRequest) -> func.HttpResponse:
             json.dumps({"success": True, "id": alert_id, "updated_fields": list(update_fields.keys())}),
             mimetype="application/json"
         )
+
+    except Exception as e:
+        return func.HttpResponse(json.dumps({"error": str(e)}), status_code=500, mimetype="application/json")
+
+
+@app.route(route="team-members", methods=["GET"])
+def get_team_members(req: func.HttpRequest) -> func.HttpResponse:
+    email = get_caller_email(req)
+    if not email:
+        return func.HttpResponse(
+            json.dumps({"error": "Not authenticated"}),
+            status_code=401,
+            mimetype="application/json"
+        )
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT client_code FROM Users WHERE v5_user = ?", email.lower())
+        rls_codes = [row[0] for row in cursor.fetchall()]
+
+        if not rls_codes:
+            conn.close()
+            return func.HttpResponse(json.dumps([]), mimetype="application/json")
+
+        placeholders = ",".join("?" for _ in rls_codes)
+        query = f"""
+            SELECT DISTINCT v5_user
+            FROM Users
+            WHERE client_code IN ({placeholders})
+              AND v5_user LIKE '%@muc-corp.com'
+            ORDER BY v5_user ASC
+        """
+        cursor.execute(query, rls_codes)
+        members = [row[0] for row in cursor.fetchall()]
+        conn.close()
+
+        return func.HttpResponse(json.dumps(members), mimetype="application/json")
 
     except Exception as e:
         return func.HttpResponse(json.dumps({"error": str(e)}), status_code=500, mimetype="application/json")
