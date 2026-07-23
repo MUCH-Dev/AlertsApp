@@ -3,175 +3,307 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Alerts App</title>
+<title>Watchtower - Alerts App</title>
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
 <style>
-  :root {
-    --brand: #0f4c81;
-    --brand-dark: #0b3a63;
-    --bg: #eef1f5;
-    --surface: #ffffff;
-    --border: #d7dce3;
-    --text: #1b1f24;
-    --text-2: #5a6472;
-    --text-3: #94a0ae;
-    --pending-bg: #fdf1d7;
-    --pending-fg: #8a5a00;
-    --entered-bg: #ddf0dd;
-    --entered-fg: #1e6b2e;
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  :root{
+    --bg:#F3F5F8;
+    --surface:#FFFFFF;
+    --ink:#18212F;
+    --muted:#66748A;
+    --border:#E3E8EF;
+    --pending:#C2760C;
+    --pending-bg:#FDF3E3;
+    --pulled:#2B5FD9;
+    --pulled-bg:#EAF0FE;
+    --entered:#0E8F79;
+    --entered-bg:#E4F6F1;
+    --accent:#2B5FD9;
   }
-  * { box-sizing: border-box; margin: 0; }
-  body {
-    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-    background: var(--bg);
-    color: var(--text);
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
   }
 
   /* ---- Sign-in gate ---- */
-  #signinScreen {
-    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  #signinScreen{ min-height:100vh; display:flex; align-items:center; justify-content:center; }
+  #signinScreen .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:40px; text-align:center; box-shadow:0 3px 14px rgba(24,33,47,.08);
   }
-  #signinScreen .card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    padding: 40px; text-align: center; box-shadow: 0 2px 12px rgba(20,40,70,0.08);
+  #signinScreen h1{ font-family:'Space Grotesk'; font-weight:700; font-size:20px; margin:0 0 8px; }
+  #signinScreen p{ color:var(--muted); margin-bottom:20px; font-size:14px; }
+  button.primary{
+    background:var(--accent); color:#fff; border:none; padding:10px 20px;
+    border-radius:9px; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit;
   }
-  #signinScreen h1 { font-size: 20px; margin-bottom: 8px; }
-  #signinScreen p { color: var(--text-2); margin-bottom: 20px; font-size: 14px; }
-  button.primary {
-    background: var(--brand); color: white; border: none; padding: 10px 20px;
-    border-radius: 8px; font-size: 14px; cursor: pointer;
-  }
-  button.primary:hover { background: var(--brand-dark); }
+  button.primary:hover{ background:#3a6ef0; }
 
   /* ---- App shell ---- */
-  #app { display: none; max-width: 900px; margin: 0 auto; padding: 20px 16px 60px; }
+  .app{ max-width:1240px; margin:0 auto; padding:28px 24px 80px; display:none; }
 
-  .topbar {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 4px 20px;
+  .topbar{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    margin-bottom:22px; flex-wrap:wrap; gap:16px;
   }
-  .topbar .title { font-size: 20px; font-weight: 600; }
-  .topbar .subtitle { font-size: 12px; color: var(--text-3); margin-top: 2px; }
-  .topbar .who { font-size: 12px; color: var(--text-2); display: flex; align-items: center; gap: 12px; }
-  .topbar button.link {
-    background: none; border: none; color: var(--brand); cursor: pointer; font-size: 12px; padding: 0;
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand-mark{
+    width:272px; height:94px; border-radius:9px;
+    object-fit:cover;
+    flex-shrink:0;
   }
+  .brand h1{ font-family:'Space Grotesk'; font-weight:700; font-size:19px; margin:0; letter-spacing:-0.01em; }
+  .brand p{ margin:1px 0 0; font-size:12.5px; color:var(--muted); }
+  .who{ display:flex; align-items:center; gap:12px; font-size:12.5px; color:var(--muted); }
+  .who button.link{ background:none; border:none; color:var(--accent); cursor:pointer; font-size:12.5px; font-family:inherit; padding:0; }
 
-  /* ---- Metrics tiles ---- */
-  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
-  .tile {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 16px; text-align: center;
-  }
-  .tile .num { font-size: 26px; font-weight: 700; }
-  .tile .label { font-size: 12px; color: var(--text-2); margin-top: 2px; }
-  .tile.pending .num { color: var(--pending-fg); }
-  .tile.entered .num { color: var(--entered-fg); }
+  /* ---- Metrics strip ---- */
+  .metrics{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+  .metric{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+  .metric .num{ font-family:'Space Grotesk'; font-size:24px; font-weight:700; }
+  .metric .label{ font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-top:2px; }
+  .metric.pending .num{ color:var(--pending); }
+  .metric.pulled .num{ color:var(--pulled); }
+  .metric.entered .num{ color:var(--entered); }
 
   /* ---- Filter bar ---- */
-  .filterbar {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px;
+  .filterbar{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:14px 16px; margin-bottom:18px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;
   }
-  .filterbar input[type="text"], .filterbar select {
-    padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px;
-    background: var(--bg);
+  .field{ display:flex; flex-direction:column; gap:4px; }
+  .field label{ font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:600; }
+  .field input, .field select{
+    border:1px solid var(--border); border-radius:8px; padding:7px 10px; font-size:13.5px;
+    font-family:inherit; background:#fff; color:var(--ink); min-width:150px;
   }
-  .filterbar input[type="text"] { flex: 1 1 160px; min-width: 140px; }
-  .seg { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-  .seg button {
-    border: none; background: var(--surface); padding: 8px 14px; font-size: 13px; cursor: pointer;
-    color: var(--text-2);
+  .field.grow{ flex:1; min-width:180px; }
+  .status-seg{ display:flex; background:#EEF1F5; border-radius:8px; padding:3px; gap:2px; }
+  .status-seg button{
+    border:none; background:none; padding:7px 13px; border-radius:6px; font-size:13px; font-weight:600;
+    color:var(--muted); cursor:pointer; font-family:inherit;
   }
-  .seg button.active { background: var(--brand); color: white; font-weight: 600; }
-  .seg button + button { border-left: 1px solid var(--border); }
+  .status-seg button.active{ background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(24,33,47,.12); }
 
   /* ---- Gallery ---- */
-  #gallery { display: flex; flex-direction: column; gap: 10px; }
-  .card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 14px 16px; position: relative;
+  .gallery{ display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px; }
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:12px 14px 13px; position:relative; border-left:4px solid var(--pending);
+    transition:box-shadow .15s; cursor:pointer;
   }
-  .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-  .badge {
-    display: inline-block; font-size: 11px; font-weight: 700; color: var(--brand);
-    background: #e7edf5; border-radius: 5px; padding: 2px 7px; margin-bottom: 4px;
-  }
-  .card-title { font-size: 15px; font-weight: 600; }
-  .card-sub { font-size: 13px; color: var(--text-2); margin-top: 1px; }
-  .status-pill {
-    font-size: 11px; font-weight: 700; border-radius: 12px; padding: 3px 10px; white-space: nowrap;
-  }
-  .status-pill.pending { background: var(--pending-bg); color: var(--pending-fg); }
-  .status-pill.entered { background: var(--entered-bg); color: var(--entered-fg); }
+  .card:hover{ box-shadow:0 3px 14px rgba(24,33,47,.08); }
+  .card.status-pulled{ border-left-color:var(--pulled); }
+  .card.status-entered{ border-left-color:var(--entered); opacity:.8; }
 
-  .card-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 6px 16px; margin-top: 10px; font-size: 12.5px;
+  .card-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .client-code{
+    font-family:'IBM Plex Mono'; font-size:11.5px; background:#EEF1F5; color:var(--muted);
+    padding:2px 7px; border-radius:5px; letter-spacing:.02em;
   }
-  .card-grid .k { color: var(--text-3); }
-  .card-grid .v { color: var(--text); }
+  .status-pill{ font-size:11px; font-weight:700; border-radius:12px; padding:3px 10px; white-space:nowrap; }
+  .status-pill.pending{ background:var(--pending-bg); color:var(--pending); }
+  .status-pill.pulled{ background:var(--pulled-bg); color:var(--pulled); }
+  .status-pill.entered{ background:var(--entered-bg); color:var(--entered); }
 
-  .notes-block { margin-top: 10px; font-size: 12px; color: var(--text-2); }
-  .notes-block .lbl { color: var(--text-3); font-weight: 600; }
-  .instructions-block { margin-top: 4px; font-size: 12px; color: var(--text-2); }
+  .card h3{ font-size:15px; margin:8px 0 1px; font-family:'Space Grotesk'; font-weight:600; }
+  .vendor{ font-size:12.5px; color:var(--muted); margin:0 0 10px; }
 
-  .card-actions { margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .card-actions input[type="text"] {
-    flex: 1 1 200px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12.5px;
-  }
-  .card-actions button {
-    background: var(--brand); color: white; border: none; padding: 6px 12px;
-    border-radius: 6px; font-size: 12px; cursor: pointer;
-  }
-  .card-actions button.keystone { background: var(--surface); color: var(--brand); border: 1px solid var(--brand); }
-  .save-status { font-size: 11px; color: var(--text-3); }
+  .card-row{ display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:3px; }
+  .card-row span:first-child{ color:var(--muted); }
+  .card-row span:last-child{ font-weight:600; font-family:'IBM Plex Mono'; font-size:12px; }
 
-  .empty-state, .loading-state {
-    text-align: center; padding: 40px 20px; color: var(--text-3); font-size: 13px;
+  .notes{
+    font-size:12px; color:var(--muted); margin:10px 0 0; padding:8px 10px; background:#F7F8FA;
+    border-radius:8px; font-style:italic; line-height:1.4;
   }
+  .instructions{
+    font-size:12px; color:var(--muted); margin:6px 0 0; padding:8px 10px; background:#F7F8FA;
+    border-radius:8px; line-height:1.4;
+  }
+  .instructions b{ color:var(--ink); font-style:normal; font-weight:600; }
+
+  .card-actions{ display:flex; gap:8px; align-items:center; margin-top:11px; flex-wrap:wrap; }
+  .card-actions input[type="text"]{
+    flex:1 1 160px; padding:6px 8px; border:1px solid var(--border); border-radius:7px; font-size:12.5px; font-family:inherit;
+  }
+  .card-actions button.save{
+    background:var(--ink); color:#fff; border:none; padding:6px 12px; border-radius:7px;
+    font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
+  .card-footer{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
+  .keystone-link{
+    font-size:11.5px; font-weight:600; color:var(--accent); text-decoration:none; cursor:pointer;
+    display:flex; align-items:center; gap:4px; background:none; border:none; font-family:inherit; padding:0;
+  }
+  .keystone-link:hover{ text-decoration:underline; }
+  .save-status{ font-size:11px; color:var(--muted); }
+
+  .empty-state, .loading-state{ text-align:center; padding:50px 20px; color:var(--muted); font-size:13.5px; grid-column:1/-1; }
+
+  /* ---- Detail modal ---- */
+  #modalOverlay{
+    display:none; position:fixed; inset:0; background:rgba(24,33,47,.45);
+    align-items:flex-start; justify-content:center; padding:40px 16px; overflow-y:auto; z-index:100;
+  }
+  #modalOverlay.show{ display:flex; }
+  .modal{
+    background:var(--surface); border-radius:14px; max-width:560px; width:100%;
+    padding:24px 26px 26px; box-shadow:0 10px 40px rgba(24,33,47,.25);
+  }
+  .modal-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:4px; }
+  .modal-top h2{ font-family:'Space Grotesk'; font-size:18px; margin:0; }
+  .modal-close{ background:none; border:none; font-size:20px; color:var(--muted); cursor:pointer; line-height:1; padding:2px; }
+  .modal-sub{ font-size:13px; color:var(--muted); margin-bottom:16px; }
+
+  .modal-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; font-size:13px; margin-bottom:16px;
+  }
+  .modal-grid .k{ color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:1px; }
+  .modal-grid .v{ font-family:'IBM Plex Mono'; font-size:12.5px; }
+
+  .modal-field{ margin-bottom:14px; }
+  .modal-field label{
+    display:block; font-size:10.5px; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.05em; font-weight:600; margin-bottom:5px;
+  }
+  .modal-field textarea, .modal-field input[type="text"]{
+    width:100%; border:1px solid var(--border); border-radius:8px; padding:9px 10px;
+    font-size:13.5px; font-family:inherit; resize:vertical;
+  }
+  .modal-field textarea{ min-height:70px; }
+  .modal-readonly{
+    font-size:12.5px; color:var(--muted); background:#F7F8FA; padding:8px 10px; border-radius:8px; line-height:1.4;
+  }
+
+  .modal-actions{ display:flex; justify-content:space-between; align-items:center; margin-top:18px; }
+  .modal-save-status{ font-size:12px; color:var(--muted); }
+  .modal-buttons{ display:flex; gap:8px; }
+  .modal-buttons button.save{
+    background:var(--ink); color:#fff; border:none; padding:9px 18px; border-radius:8px;
+    font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
+  .modal-buttons button.keystone{
+    background:none; border:1px solid var(--accent); color:var(--accent); padding:9px 16px;
+    border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
+
+  /* ---- Lead mode toggle ---- */
+  .lead-toggle{
+    display:flex; align-items:center; gap:9px; background:var(--surface); border:1px solid var(--border);
+    padding:7px 13px; border-radius:9px; font-size:12.5px; font-weight:600; cursor:pointer; user-select:none;
+  }
+  .switch{ position:relative; width:34px; height:19px; flex-shrink:0; }
+  .switch input{ opacity:0; width:0; height:0; }
+  .slider{ position:absolute; inset:0; background:#CBD4E1; border-radius:20px; transition:.15s; }
+  .slider:before{ content:""; position:absolute; width:13px; height:13px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.15s; }
+  .switch input:checked + .slider{ background:var(--accent); }
+  .switch input:checked + .slider:before{ transform:translateX(15px); }
+
+  /* ---- Batch assign bar ---- */
+  .batchbar{
+    display:none; align-items:center; gap:10px; background:var(--ink); color:#fff;
+    border-radius:12px; padding:11px 16px; margin-bottom:16px; font-size:13.5px; flex-wrap:wrap;
+  }
+  .batchbar.show{ display:flex; }
+  .batchbar select, .batchbar input{
+    border:none; border-radius:7px; padding:7px 10px; font-size:13px; font-family:inherit;
+  }
+  .batchbar .assignField{ margin-left:auto; display:flex; gap:8px; align-items:center; }
+  .batchbar button{
+    background:var(--accent); color:#fff; border:none; border-radius:7px; padding:7px 14px;
+    font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
+  .batchbar button:hover{ background:#3a6ef0; }
+  .batchbar button:disabled{ opacity:.5; cursor:not-allowed; }
+
+  .card-check{ display:none; margin-right:6px; }
+  .gallery.lead-mode .card-check{ display:inline-block; }
+  .gallery.lead-mode .card-top{ align-items:center; }
 </style>
 </head>
 <body>
 
   <div id="signinScreen">
     <div class="card">
-      <h1>Alerts App</h1>
+      <h1>Watchtower - Alerts App</h1>
       <p>Sign in with your muc-corp.com account to view today's alerts.</p>
       <button class="primary" id="loginBtn">Sign in</button>
     </div>
   </div>
 
-  <div id="app">
+  <div class="app" id="app">
+
     <div class="topbar">
-      <div>
-        <div class="title">Alerts App</div>
-        <div class="subtitle">Today's alerts</div>
+      <div class="brand">
+        <img src="logo.png" class="brand-mark" alt="Company logo">
+        <div>
+          <h1>Watchtower - Alerts App</h1>
+          <p>gallery view · Muc-corp</p>
+        </div>
       </div>
       <div class="who">
+        <label class="lead-toggle">
+          <span class="switch">
+            <input type="checkbox" id="leadModeInput">
+            <span class="slider"></span>
+          </span>
+          Team lead view
+        </label>
         <span id="whoLabel"></span>
         <button class="link" id="logoutBtn">Sign out</button>
       </div>
     </div>
 
     <div class="metrics">
-      <div class="tile pending"><div class="num" id="metricPending">–</div><div class="label">Pending</div></div>
-      <div class="tile entered"><div class="num" id="metricEntered">–</div><div class="label">Entered</div></div>
-      <div class="tile"><div class="num" id="metricTotal">–</div><div class="label">Total today</div></div>
+      <div class="metric pending"><div class="num" id="metricPending">–</div><div class="label">Pending</div></div>
+      <div class="metric pulled"><div class="num" id="metricPulled">–</div><div class="label">Bill Pulled</div></div>
+      <div class="metric entered"><div class="num" id="metricEntered">–</div><div class="label">Entered</div></div>
+      <div class="metric"><div class="num" id="metricTotal">–</div><div class="label">Total today</div></div>
     </div>
 
     <div class="filterbar">
-      <input type="text" id="clientSearch" placeholder="Client code…">
-      <select id="vendorSelect"><option>All vendors</option></select>
-      <div class="seg" id="statusSeg">
-        <button data-status="Active" class="active">Active</button>
-        <button data-status="Entered">Entered</button>
-        <button data-status="All">All</button>
+      <div class="field grow">
+        <label>Client code</label>
+        <input type="text" id="clientSearch" placeholder="Starts with…">
+      </div>
+      <div class="field">
+        <label>Vendor</label>
+        <select id="vendorSelect"><option>All vendors</option></select>
+      </div>
+      <div class="field">
+        <label>Status</label>
+        <div class="status-seg" id="statusSeg">
+          <button data-status="Active" class="active">Active</button>
+          <button data-status="Entered">Entered</button>
+          <button data-status="All">All</button>
+        </div>
       </div>
     </div>
 
-    <div id="gallery"></div>
+    <div class="batchbar" id="batchBar">
+      <strong id="batchCount">0 selected</strong>
+      <div class="assignField">
+        <input type="text" id="batchAssignInput" list="teamMembersList" placeholder="name@muc-corp.com">
+        <button id="batchAssignBtn" disabled>Assign selected</button>
+      </div>
+    </div>
+
+    <div class="gallery" id="gallery"></div>
+
   </div>
+
+  <div id="modalOverlay">
+    <div class="modal" id="modalContent"></div>
+  </div>
+
+  <datalist id="teamMembersList"></datalist>
 
 <script>
   const CLIENT_ID = "6b04b1f9-b1d4-4366-aa47-12cbd7b9cd27";
@@ -191,6 +323,9 @@
 
   let statusFilter = "Active";
   let clientSearchDebounce = null;
+  let currentAlerts = [];
+  let leadMode = false;
+  let selectedIds = new Set();
 
   function setViewState(signedIn) {
     document.getElementById("signinScreen").style.display = signedIn ? "none" : "flex";
@@ -243,38 +378,29 @@
     return "https://keystone-muc.up.railway.app/accounts/detail?" + p.toString();
   }
 
+  function statusInfo(alert) {
+    if (alert.entered) return { cls: "entered", label: "Entered" };
+    if (alert.bill_pulled) return { cls: "pulled", label: "Bill Pulled" };
+    return { cls: "pending", label: "Pending" };
+  }
+
   function renderCard(alert) {
-    const isEntered = !!alert.entered;
-    const notes = displayNote(alert.latest_account_note, alert.alert_notes);
-    const instructions = alert.account_instructions ? escapeHtml(alert.account_instructions) : "";
+    const status = statusInfo(alert);
 
     return `
-      <div class="card" data-id="${alert.id}">
+      <div class="card status-${status.cls}" data-id="${alert.id}">
         <div class="card-top">
-          <div>
-            <div class="badge">${escapeHtml(alert.client_code)}</div>
-            <div class="card-title">${escapeHtml(alert.client_name)}</div>
-            <div class="card-sub">${escapeHtml(alert.vendor)}</div>
-          </div>
-          <div class="status-pill ${isEntered ? "entered" : "pending"}">${isEntered ? "Entered" : "Pending"}</div>
+          <span>
+            <input type="checkbox" class="card-check" data-id="${alert.id}">
+            <span class="client-code">${escapeHtml(alert.client_code)}</span>
+          </span>
+          <div class="status-pill ${status.cls}">${status.label}</div>
         </div>
+        <h3>${escapeHtml(alert.client_name)}</h3>
+        <p class="vendor">${escapeHtml(alert.vendor)}</p>
 
-        <div class="card-grid">
-          <div><span class="k">Account: </span><span class="v">${escapeHtml(alert.account_number)}</span></div>
-          <div><span class="k">Billing: </span><span class="v">${escapeHtml(alert.billing_period)}</span></div>
-          <div><span class="k">Last bill: </span><span class="v">${escapeHtml(alert.last_bill_date) || "—"}</span></div>
-          <div><span class="k">Due: </span><span class="v">${escapeHtml(alert.last_bill_due_date) || "—"}</span></div>
-        </div>
-
-        ${notes ? `<div class="notes-block"><span class="lbl">Notes: </span>${escapeHtml(notes)}</div>` : ""}
-        ${instructions ? `<div class="instructions-block"><span class="lbl">Instructions: </span>${instructions}</div>` : ""}
-
-        <div class="card-actions">
-          <input type="text" class="notesInput" placeholder="Add a note…" value="${escapeHtml(alert.alert_notes || "")}">
-          <button class="saveNoteBtn">Save note</button>
-          <button class="keystone" onclick="window.open('${keystoneUrl(alert)}', '_blank')">Open in Keystone</button>
-          <span class="save-status"></span>
-        </div>
+        <div class="card-row"><span>Last bill</span><span>${escapeHtml(alert.last_bill_date) || "—"}</span></div>
+        <div class="card-row"><span>Billing</span><span>${escapeHtml(alert.billing_period) || "—"}</span></div>
       </div>
     `;
   }
@@ -283,6 +409,7 @@
     try {
       const m = await callApi("/metrics");
       document.getElementById("metricPending").textContent = m.pending_count;
+      document.getElementById("metricPulled").textContent = m.pulled_count;
       document.getElementById("metricEntered").textContent = m.entered_count;
       document.getElementById("metricTotal").textContent = m.total_count;
     } catch (e) {
@@ -301,6 +428,16 @@
     }
   }
 
+  async function loadTeamMembers() {
+    try {
+      const members = await callApi("/team-members");
+      const datalist = document.getElementById("teamMembersList");
+      datalist.innerHTML = members.map(m => `<option value="${escapeHtml(m)}">`).join("");
+    } catch (e) {
+      console.error("team-members failed", e);
+    }
+  }
+
   async function loadAlerts() {
     const gallery = document.getElementById("gallery");
     gallery.innerHTML = `<div class="loading-state">Loading alerts…</div>`;
@@ -314,6 +451,7 @@
 
     try {
       const alerts = await callApi("/alerts?" + params.toString());
+      currentAlerts = alerts;
       if (alerts.length === 0) {
         gallery.innerHTML = `<div class="empty-state">No alerts match these filters.</div>`;
         return;
@@ -324,24 +462,155 @@
     }
   }
 
-  document.getElementById("gallery").addEventListener("click", async (e) => {
-    if (!e.target.classList.contains("saveNoteBtn")) return;
-    const card = e.target.closest(".card");
-    const id = card.dataset.id;
-    const input = card.querySelector(".notesInput");
-    const statusEl = card.querySelector(".save-status");
-    statusEl.textContent = "Saving…";
-    try {
-      await callApi(`/alerts/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ alert_notes: input.value })
-      });
-      statusEl.textContent = "Saved";
-      setTimeout(() => { statusEl.textContent = ""; }, 2000);
-    } catch (err) {
-      statusEl.textContent = "Failed to save";
-      console.error(err);
+  document.getElementById("gallery").addEventListener("click", (e) => {
+    if (e.target.classList.contains("card-check")) {
+      const id = e.target.dataset.id;
+      if (e.target.checked) selectedIds.add(id); else selectedIds.delete(id);
+      updateBatchBar();
+      return;
     }
+    const card = e.target.closest(".card");
+    if (!card) return;
+    const alert = currentAlerts.find(a => String(a.id) === card.dataset.id);
+    if (alert) openModal(alert);
+  });
+
+  function updateBatchBar() {
+    document.getElementById("batchCount").textContent = selectedIds.size + " selected";
+    document.getElementById("batchAssignBtn").disabled = selectedIds.size === 0;
+  }
+
+  document.getElementById("leadModeInput").addEventListener("change", (e) => {
+    leadMode = e.target.checked;
+    document.getElementById("gallery").classList.toggle("lead-mode", leadMode);
+    document.getElementById("batchBar").classList.toggle("show", leadMode);
+    selectedIds.clear();
+    updateBatchBar();
+  });
+
+  document.getElementById("batchAssignBtn").addEventListener("click", async () => {
+    const assignee = document.getElementById("batchAssignInput").value.trim();
+    if (!assignee || selectedIds.size === 0) return;
+
+    const btn = document.getElementById("batchAssignBtn");
+    btn.disabled = true;
+    btn.textContent = "Assigning…";
+
+    const now = new Date().toISOString();
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map(id =>
+          callApi(`/alerts/${id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ assigned_to: assignee, assigned_at: now })
+          })
+        )
+      );
+      selectedIds.clear();
+      document.getElementById("batchAssignInput").value = "";
+      updateBatchBar();
+      btn.textContent = "Assign selected";
+      await loadAlerts();
+    } catch (err) {
+      btn.textContent = "Assign selected";
+      btn.disabled = false;
+      console.error("Batch assign failed", err);
+      alert("Some assignments may have failed. Check console for details.");
+    }
+  });
+
+  function renderModal(alert) {
+    const status = statusInfo(alert);
+    const instructions = alert.account_instructions ? escapeHtml(alert.account_instructions) : "";
+
+    return `
+      <div class="modal-top">
+        <h2>${escapeHtml(alert.client_name)}</h2>
+        <button class="modal-close" id="modalCloseBtn">&times;</button>
+      </div>
+      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · <span class="status-pill ${status.cls}">${status.label}</span></div>
+
+      <div class="modal-grid">
+        <div><div class="k">Account number</div><div class="v">${escapeHtml(alert.account_number)}</div></div>
+        <div><div class="k">Account name</div><div class="v">${escapeHtml(alert.account_name)}</div></div>
+        <div><div class="k">Tax ID</div><div class="v">${escapeHtml(alert.tax_id) || "—"}</div></div>
+        <div><div class="k">Billing period</div><div class="v">${escapeHtml(alert.billing_period)}</div></div>
+        <div><div class="k">Payment method</div><div class="v">${escapeHtml(alert.payment_method) || "—"}</div></div>
+        <div><div class="k">Alert type</div><div class="v">${escapeHtml(alert.alert_type)}</div></div>
+        <div><div class="k">Last bill date</div><div class="v">${escapeHtml(alert.last_bill_date) || "—"}</div></div>
+        <div><div class="k">Last bill due</div><div class="v">${escapeHtml(alert.last_bill_due_date) || "—"}</div></div>
+      </div>
+
+      ${instructions ? `<div class="modal-field"><label>Account instructions</label><div class="modal-readonly">${instructions}</div></div>` : ""}
+
+      <div class="modal-field">
+        <label><input type="checkbox" id="modalBillPulledInput" ${alert.bill_pulled ? "checked" : ""} ${alert.entered ? "disabled" : ""}> Bill pulled</label>
+        ${alert.entered ? `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;">Already entered — bill pulled status no longer applies.</div>` : ""}
+      </div>
+
+      <div class="modal-field">
+        <label>Notes</label>
+        <textarea id="modalNotesInput">${escapeHtml(alert.alert_notes || "")}</textarea>
+      </div>
+
+      <div class="modal-field">
+        <label>Assigned to</label>
+        <input type="text" id="modalAssignedInput" list="teamMembersList" placeholder="name@muc-corp.com" value="${escapeHtml(alert.assigned_to || "")}">
+      </div>
+
+      <div class="modal-actions">
+        <span class="modal-save-status" id="modalSaveStatus"></span>
+        <div class="modal-buttons">
+          <button class="keystone" onclick="window.open('${keystoneUrl(alert)}', '_blank')">Open in Keystone</button>
+          <button class="save" id="modalSaveBtn">Save changes</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function openModal(alert) {
+    document.getElementById("modalContent").innerHTML = renderModal(alert);
+    document.getElementById("modalOverlay").classList.add("show");
+
+    document.getElementById("modalCloseBtn").addEventListener("click", closeModal);
+
+    document.getElementById("modalSaveBtn").addEventListener("click", async () => {
+      const statusEl = document.getElementById("modalSaveStatus");
+      const notes = document.getElementById("modalNotesInput").value;
+      const assignedTo = document.getElementById("modalAssignedInput").value.trim();
+      const billPulledEl = document.getElementById("modalBillPulledInput");
+      const billPulled = billPulledEl.disabled ? alert.bill_pulled : billPulledEl.checked;
+
+      statusEl.textContent = "Saving…";
+      try {
+        await callApi(`/alerts/${alert.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            alert_notes: notes,
+            assigned_to: assignedTo || null,
+            assigned_at: assignedTo ? new Date().toISOString() : null,
+            bill_pulled: billPulled
+          })
+        });
+        statusEl.textContent = "Saved";
+        await loadAlerts();
+      } catch (err) {
+        statusEl.textContent = "Failed to save";
+        console.error(err);
+      }
+    });
+  }
+
+  function closeModal() {
+    document.getElementById("modalOverlay").classList.remove("show");
+  }
+
+  document.getElementById("modalOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "modalOverlay") closeModal();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeModal();
   });
 
   document.getElementById("statusSeg").addEventListener("click", (e) => {
@@ -380,7 +649,7 @@
     setViewState(true);
     document.getElementById("whoLabel").textContent = account.username;
 
-    await Promise.all([loadMetrics(), loadVendors()]);
+    await Promise.all([loadMetrics(), loadVendors(), loadTeamMembers()]);
     await loadAlerts();
   }
 
