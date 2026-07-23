@@ -16,8 +16,12 @@
     --border:#E3E8EF;
     --pending:#C2760C;
     --pending-bg:#FDF3E3;
+    --pulled:#2B5FD9;
+    --pulled-bg:#EAF0FE;
     --entered:#0E8F79;
     --entered-bg:#E4F6F1;
+    --critical:#C4432E;
+    --critical-bg:#FBE7E3;
     --accent:#2B5FD9;
   }
   *{box-sizing:border-box;}
@@ -52,22 +56,22 @@
   }
   .brand{ display:flex; align-items:center; gap:12px; }
   .brand-mark{
-    width:38px; height:38px; border-radius:9px;
-    background:linear-gradient(155deg,#2B5FD9,#18212F);
-    display:flex; align-items:center; justify-content:center;
-    color:#fff; font-family:'Space Grotesk'; font-weight:700; font-size:15px; flex-shrink:0;
-  }
+  width: 272px; height: 94px; border-radius:9px;
+  object-fit:cover;
+  flex-shrink:0;
+}
   .brand h1{ font-family:'Space Grotesk'; font-weight:700; font-size:19px; margin:0; letter-spacing:-0.01em; }
   .brand p{ margin:1px 0 0; font-size:12.5px; color:var(--muted); }
   .who{ display:flex; align-items:center; gap:12px; font-size:12.5px; color:var(--muted); }
   .who button.link{ background:none; border:none; color:var(--accent); cursor:pointer; font-size:12.5px; font-family:inherit; padding:0; }
 
   /* ---- Metrics strip ---- */
-  .metrics{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
+  .metrics{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
   .metric{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
   .metric .num{ font-family:'Space Grotesk'; font-size:24px; font-weight:700; }
   .metric .label{ font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-top:2px; }
   .metric.pending .num{ color:var(--pending); }
+  .metric.critical .num{ color:var(--critical); }
   .metric.entered .num{ color:var(--entered); }
 
   /* ---- Filter bar ---- */
@@ -90,13 +94,14 @@
   .status-seg button.active{ background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(24,33,47,.12); }
 
   /* ---- Gallery ---- */
-  .gallery{ display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+  .gallery{ display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px; }
   .card{
     background:var(--surface); border:1px solid var(--border); border-radius:12px;
-    padding:14px 16px 15px; position:relative; border-left:4px solid var(--pending);
-    transition:box-shadow .15s;
+    padding:12px 14px 13px; position:relative; border-left:4px solid var(--pending);
+    transition:box-shadow .15s; cursor:pointer;
   }
   .card:hover{ box-shadow:0 3px 14px rgba(24,33,47,.08); }
+  .card.status-pulled{ border-left-color:var(--pulled); }
   .card.status-entered{ border-left-color:var(--entered); opacity:.8; }
 
   .card-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
@@ -105,8 +110,13 @@
     padding:2px 7px; border-radius:5px; letter-spacing:.02em;
   }
   .status-pill{ font-size:11px; font-weight:700; border-radius:12px; padding:3px 10px; white-space:nowrap; }
+  .pill-group{ display:flex; gap:6px; align-items:center; }
   .status-pill.pending{ background:var(--pending-bg); color:var(--pending); }
+  .status-pill.pulled{ background:var(--pulled-bg); color:var(--pulled); }
   .status-pill.entered{ background:var(--entered-bg); color:var(--entered); }
+  .status-pill.critical{ background:var(--critical-bg); color:var(--critical); }
+
+  .card.is-critical{ border-left-color:var(--critical); }
 
   .card h3{ font-size:15px; margin:8px 0 1px; font-family:'Space Grotesk'; font-weight:600; }
   .vendor{ font-size:12.5px; color:var(--muted); margin:0 0 10px; }
@@ -169,9 +179,9 @@
     display:block; font-size:10.5px; color:var(--muted); text-transform:uppercase;
     letter-spacing:.05em; font-weight:600; margin-bottom:5px;
   }
-  .modal-field textarea, .modal-field input[type="text"]{
+  .modal-field textarea, .modal-field input[type="text"], .modal-field select{
     width:100%; border:1px solid var(--border); border-radius:8px; padding:9px 10px;
-    font-size:13.5px; font-family:inherit; resize:vertical;
+    font-size:13.5px; font-family:inherit; resize:vertical; background:#fff;
   }
   .modal-field textarea{ min-height:70px; }
   .modal-readonly{
@@ -189,13 +199,71 @@
     background:none; border:1px solid var(--accent); color:var(--accent); padding:9px 16px;
     border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
   }
+
+  /* ---- Lead mode toggle ---- */
+  .lead-toggle{
+    display:flex; align-items:center; gap:9px; background:var(--surface); border:1px solid var(--border);
+    padding:7px 13px; border-radius:9px; font-size:12.5px; font-weight:600; cursor:pointer; user-select:none;
+  }
+  .switch{ position:relative; width:34px; height:19px; flex-shrink:0; }
+  .switch input{ opacity:0; width:0; height:0; }
+  .slider{ position:absolute; inset:0; background:#CBD4E1; border-radius:20px; transition:.15s; }
+  .slider:before{ content:""; position:absolute; width:13px; height:13px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.15s; }
+  .switch input:checked + .slider{ background:var(--accent); }
+  .switch input:checked + .slider:before{ transform:translateX(15px); }
+
+  /* ---- Batch assign bar ---- */
+  .batchbar{
+    display:none; align-items:center; gap:10px; background:var(--ink); color:#fff;
+    border-radius:12px; padding:11px 16px; margin-bottom:16px; font-size:13.5px; flex-wrap:wrap;
+  }
+  .batchbar.show{ display:flex; }
+  .batchbar select, .batchbar input{
+    border:none; border-radius:7px; padding:7px 10px; font-size:13px; font-family:inherit;
+  }
+  .batchbar .assignField{ margin-left:auto; display:flex; gap:8px; align-items:center; }
+  .batchbar button{
+    background:var(--accent); color:#fff; border:none; border-radius:7px; padding:7px 14px;
+    font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
+  .batchbar button:hover{ background:#3a6ef0; }
+  .batchbar button:disabled{ opacity:.5; cursor:not-allowed; }
+
+  .card-check{ display:none; margin-right:6px; }
+  .gallery.lead-mode .card-check{ display:inline-block; }
+  .gallery.lead-mode .card-top{ align-items:center; }
+
+  /* ---- Vendor combo box (searchable multi-select) ---- */
+  .combo{ position:relative; }
+  .combo-chips{ display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px; }
+  .combo-chips:empty{ margin-bottom:0; }
+  .chip{
+    display:flex; align-items:center; gap:5px; background:#EEF1F5; color:var(--ink);
+    font-size:11.5px; font-weight:600; padding:3px 6px 3px 9px; border-radius:12px;
+  }
+  .chip button{
+    background:none; border:none; color:var(--muted); cursor:pointer; font-size:13px; line-height:1;
+    padding:0; display:flex;
+  }
+  .combo-panel{
+    display:none; position:absolute; top:100%; left:0; margin-top:4px; width:320px; max-height:260px;
+    overflow-y:auto; overflow-x:hidden; background:#fff; border:1px solid var(--border); border-radius:8px;
+    box-shadow:0 6px 20px rgba(24,33,47,.14); z-index:20;
+  }
+  .combo-panel.show{ display:block; }
+  .combo-option{
+    display:flex; align-items:flex-start; gap:8px; padding:8px 10px; font-size:13px; cursor:pointer; line-height:1.35;
+  }
+  .combo-option input[type="checkbox"]{ margin-top:2px; flex-shrink:0; }
+  .combo-option:hover{ background:#F7F8FA; }
+  .combo-empty{ padding:10px; font-size:12.5px; color:var(--muted); text-align:center; }
 </style>
 </head>
 <body>
 
   <div id="signinScreen">
     <div class="card">
-      <h1>Alerts App</h1>
+      <h1>Watchtower - Alerts App</h1>
       <p>Sign in with your muc-corp.com account to view today's alerts.</p>
       <button class="primary" id="loginBtn">Sign in</button>
     </div>
@@ -205,13 +273,20 @@
 
     <div class="topbar">
       <div class="brand">
-        <div class="brand-mark">A</div>
+        <img src="logo.png" class="brand-mark" alt="Company logo">
         <div>
-          <h1>Alerts App</h1>
+          <h1>Watchtower - Alerts App</h1>
           <p>gallery view · Muc-corp</p>
         </div>
       </div>
       <div class="who">
+        <label class="lead-toggle">
+          <span class="switch">
+            <input type="checkbox" id="leadModeInput">
+            <span class="slider"></span>
+          </span>
+          Team lead view
+        </label>
         <span id="whoLabel"></span>
         <button class="link" id="logoutBtn">Sign out</button>
       </div>
@@ -219,26 +294,40 @@
 
     <div class="metrics">
       <div class="metric pending"><div class="num" id="metricPending">–</div><div class="label">Pending</div></div>
+      <div class="metric critical"><div class="num" id="metricCritical">–</div><div class="label">Critical</div></div>
       <div class="metric entered"><div class="num" id="metricEntered">–</div><div class="label">Entered</div></div>
       <div class="metric"><div class="num" id="metricTotal">–</div><div class="label">Total today</div></div>
     </div>
 
     <div class="filterbar">
-      <div class="field grow">
+      <div class="field">
         <label>Client code</label>
         <input type="text" id="clientSearch" placeholder="Starts with…">
       </div>
       <div class="field">
         <label>Vendor</label>
-        <select id="vendorSelect"><option>All vendors</option></select>
+        <div class="combo" id="vendorCombo">
+          <div class="combo-chips" id="vendorChips"></div>
+          <input type="text" id="vendorSearchInput" placeholder="All vendors" autocomplete="off">
+          <div class="combo-panel" id="vendorPanel"></div>
+        </div>
       </div>
       <div class="field">
         <label>Status</label>
         <div class="status-seg" id="statusSeg">
           <button data-status="Active" class="active">Active</button>
+          <button data-status="Critical">Critical</button>
           <button data-status="Entered">Entered</button>
           <button data-status="All">All</button>
         </div>
+      </div>
+    </div>
+
+    <div class="batchbar" id="batchBar">
+      <strong id="batchCount">0 selected</strong>
+      <div class="assignField">
+        <select id="batchAssignInput"></select>
+        <button id="batchAssignBtn" disabled>Assign selected</button>
       </div>
     </div>
 
@@ -269,6 +358,11 @@
   let statusFilter = "Active";
   let clientSearchDebounce = null;
   let currentAlerts = [];
+  let leadMode = false;
+  let selectedIds = new Set();
+  let teamMembers = [];
+  let allVendors = [];
+  let selectedVendors = new Set();
 
   function setViewState(signedIn) {
     document.getElementById("signinScreen").style.display = signedIn ? "none" : "flex";
@@ -321,36 +415,33 @@
     return "https://keystone-muc.up.railway.app/accounts/detail?" + p.toString();
   }
 
+  function statusInfo(alert) {
+    if (alert.entered) return { cls: "entered", label: "Entered" };
+    if (alert.bill_pulled) return { cls: "pulled", label: "Bill Pulled" };
+    return { cls: "pending", label: "Pending" };
+  }
+
   function renderCard(alert) {
-    const isEntered = !!alert.entered;
-    const notes = displayNote(alert.latest_account_note, alert.alert_notes);
-    const instructions = alert.account_instructions ? escapeHtml(alert.account_instructions) : "";
+    const status = statusInfo(alert);
+    const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= 65);
 
     return `
-      <div class="card ${isEntered ? "status-entered" : ""}" data-id="${alert.id}">
+      <div class="card status-${status.cls} ${isCritical ? "is-critical" : ""}" data-id="${alert.id}">
         <div class="card-top">
-          <span class="client-code">${escapeHtml(alert.client_code)}</span>
-          <div class="status-pill ${isEntered ? "entered" : "pending"}">${isEntered ? "Entered" : "Pending"}</div>
+          <span>
+            <input type="checkbox" class="card-check" data-id="${alert.id}">
+            <span class="client-code">${escapeHtml(alert.client_code)}</span>
+          </span>
+          <span class="pill-group">
+            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>
+          </span>
         </div>
         <h3>${escapeHtml(alert.client_name)}</h3>
         <p class="vendor">${escapeHtml(alert.vendor)}</p>
 
-        <div class="card-row"><span>Account</span><span>${escapeHtml(alert.account_number)}</span></div>
-        <div class="card-row"><span>Billing</span><span>${escapeHtml(alert.billing_period)}</span></div>
         <div class="card-row"><span>Last bill</span><span>${escapeHtml(alert.last_bill_date) || "—"}</span></div>
-        <div class="card-row"><span>Due</span><span>${escapeHtml(alert.last_bill_due_date) || "—"}</span></div>
-
-        ${notes ? `<div class="notes">${escapeHtml(notes)}</div>` : ""}
-        ${instructions ? `<div class="instructions"><b>Instructions:</b> ${instructions}</div>` : ""}
-
-        <div class="card-actions">
-          <input type="text" class="notesInput" placeholder="Add a note…" value="${escapeHtml(alert.alert_notes || "")}">
-          <button class="save saveNoteBtn">Save</button>
-        </div>
-        <div class="card-footer">
-          <button class="keystone-link" onclick="window.open('${keystoneUrl(alert)}', '_blank')">→ Open in Keystone</button>
-          <span class="save-status"></span>
-        </div>
+        <div class="card-row"><span>Billing</span><span>${escapeHtml(alert.billing_period) || "—"}</span></div>
+        ${alert.days_alerted != null ? `<div class="card-row"><span>On alert</span><span>${alert.days_alerted}d</span></div>` : ""}
       </div>
     `;
   }
@@ -359,6 +450,7 @@
     try {
       const m = await callApi("/metrics");
       document.getElementById("metricPending").textContent = m.pending_count;
+      document.getElementById("metricCritical").textContent = m.critical_count;
       document.getElementById("metricEntered").textContent = m.entered_count;
       document.getElementById("metricTotal").textContent = m.total_count;
     } catch (e) {
@@ -368,12 +460,80 @@
 
   async function loadVendors() {
     try {
-      const vendors = await callApi("/vendors");
-      const select = document.getElementById("vendorSelect");
-      select.innerHTML = '<option>All vendors</option>' +
-        vendors.map(v => `<option>${escapeHtml(v)}</option>`).join("");
+      allVendors = await callApi("/vendors");
+      renderVendorPanel("");
+      renderVendorChips();
     } catch (e) {
       console.error("vendors failed", e);
+    }
+  }
+
+  function renderVendorChips() {
+    const chipsEl = document.getElementById("vendorChips");
+    chipsEl.innerHTML = Array.from(selectedVendors).map(v => `
+      <span class="chip">${escapeHtml(v)}<button data-vendor="${escapeHtml(v)}" class="chipRemove">&times;</button></span>
+    `).join("");
+  }
+
+  function renderVendorPanel(searchText) {
+    const panel = document.getElementById("vendorPanel");
+    const filtered = allVendors.filter(v => v.toLowerCase().includes(searchText.toLowerCase()));
+    if (filtered.length === 0) {
+      panel.innerHTML = `<div class="combo-empty">No matching vendors</div>`;
+      return;
+    }
+    panel.innerHTML = filtered.map(v => `
+      <label class="combo-option">
+        <input type="checkbox" class="vendorOption" data-vendor="${escapeHtml(v)}" ${selectedVendors.has(v) ? "checked" : ""}>
+        ${escapeHtml(v)}
+      </label>
+    `).join("");
+  }
+
+  const vendorSearchInput = document.getElementById("vendorSearchInput");
+  const vendorPanel = document.getElementById("vendorPanel");
+
+  vendorSearchInput.addEventListener("focus", () => {
+    renderVendorPanel(vendorSearchInput.value);
+    vendorPanel.classList.add("show");
+  });
+
+  vendorSearchInput.addEventListener("input", () => {
+    renderVendorPanel(vendorSearchInput.value);
+    vendorPanel.classList.add("show");
+  });
+
+  vendorPanel.addEventListener("change", (e) => {
+    if (!e.target.classList.contains("vendorOption")) return;
+    const v = e.target.dataset.vendor;
+    if (e.target.checked) selectedVendors.add(v); else selectedVendors.delete(v);
+    renderVendorChips();
+    loadAlerts();
+  });
+
+  document.getElementById("vendorChips").addEventListener("click", (e) => {
+    const btn = e.target.closest(".chipRemove");
+    if (!btn) return;
+    selectedVendors.delete(btn.dataset.vendor);
+    renderVendorChips();
+    renderVendorPanel(vendorSearchInput.value);
+    loadAlerts();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!document.getElementById("vendorCombo").contains(e.target)) {
+      vendorPanel.classList.remove("show");
+    }
+  });
+
+  async function loadTeamMembers() {
+    try {
+      teamMembers = await callApi("/team-members");
+      const batchSelect = document.getElementById("batchAssignInput");
+      batchSelect.innerHTML = `<option value="">Select assignee…</option>` +
+        teamMembers.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
+    } catch (e) {
+      console.error("team-members failed", e);
     }
   }
 
@@ -385,8 +545,7 @@
     if (statusFilter !== "All") params.set("status", statusFilter);
     const clientSearch = document.getElementById("clientSearch").value.trim();
     if (clientSearch) params.set("client_code_search", clientSearch);
-    const vendor = document.getElementById("vendorSelect").value;
-    if (vendor && vendor !== "All vendors") params.set("vendor", vendor);
+    if (selectedVendors.size > 0) params.set("vendor", Array.from(selectedVendors).join(","));
 
     try {
       const alerts = await callApi("/alerts?" + params.toString());
@@ -401,38 +560,74 @@
     }
   }
 
-  document.getElementById("gallery").addEventListener("click", async (e) => {
-    if (e.target.classList.contains("saveNoteBtn")) {
-      const card = e.target.closest(".card");
-      const id = card.dataset.id;
-      const input = card.querySelector(".notesInput");
-      const statusEl = card.querySelector(".save-status");
-      statusEl.textContent = "Saving…";
-      try {
-        await callApi(`/alerts/${id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ alert_notes: input.value })
-        });
-        statusEl.textContent = "Saved";
-        setTimeout(() => { statusEl.textContent = ""; }, 2000);
-      } catch (err) {
-        statusEl.textContent = "Failed to save";
-        console.error(err);
-      }
+  document.getElementById("gallery").addEventListener("click", (e) => {
+    if (e.target.classList.contains("card-check")) {
+      const id = e.target.dataset.id;
+      if (e.target.checked) selectedIds.add(id); else selectedIds.delete(id);
+      updateBatchBar();
       return;
     }
-
-    if (e.target.closest(".keystone-link")) return;
-    if (e.target.tagName === "INPUT") return;
-
     const card = e.target.closest(".card");
     if (!card) return;
     const alert = currentAlerts.find(a => String(a.id) === card.dataset.id);
     if (alert) openModal(alert);
   });
 
+  function updateBatchBar() {
+    document.getElementById("batchCount").textContent = selectedIds.size + " selected";
+    document.getElementById("batchAssignBtn").disabled = selectedIds.size === 0;
+  }
+
+  document.getElementById("leadModeInput").addEventListener("change", (e) => {
+    leadMode = e.target.checked;
+    document.getElementById("gallery").classList.toggle("lead-mode", leadMode);
+    document.getElementById("batchBar").classList.toggle("show", leadMode);
+    selectedIds.clear();
+    updateBatchBar();
+  });
+
+  document.getElementById("batchAssignBtn").addEventListener("click", async () => {
+    const assignee = document.getElementById("batchAssignInput").value.trim();
+    if (!assignee || selectedIds.size === 0) return;
+
+    const btn = document.getElementById("batchAssignBtn");
+    btn.disabled = true;
+    btn.textContent = "Assigning…";
+
+    const now = new Date().toISOString();
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map(id =>
+          callApi(`/alerts/${id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ assigned_to: assignee, assigned_at: now })
+          })
+        )
+      );
+      selectedIds.clear();
+      document.getElementById("batchAssignInput").value = "";
+      updateBatchBar();
+      btn.textContent = "Assign selected";
+      await loadAlerts();
+    } catch (err) {
+      btn.textContent = "Assign selected";
+      btn.disabled = false;
+      console.error("Batch assign failed", err);
+      alert("Some assignments may have failed. Check console for details.");
+    }
+  });
+
+  function buildAssigneeOptions(selectedValue) {
+    let opts = `<option value="">— Unassigned —</option>`;
+    opts += teamMembers.map(m =>
+      `<option value="${escapeHtml(m)}" ${m === selectedValue ? "selected" : ""}>${escapeHtml(m)}</option>`
+    ).join("");
+    return opts;
+  }
+
   function renderModal(alert) {
-    const isEntered = !!alert.entered;
+    const status = statusInfo(alert);
+    const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= 65);
     const instructions = alert.account_instructions ? escapeHtml(alert.account_instructions) : "";
 
     return `
@@ -440,7 +635,7 @@
         <h2>${escapeHtml(alert.client_name)}</h2>
         <button class="modal-close" id="modalCloseBtn">&times;</button>
       </div>
-      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · <span class="status-pill ${isEntered ? "entered" : "pending"}">${isEntered ? "Entered" : "Pending"}</span></div>
+      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · ${isCritical ? `<span class="status-pill critical">Critical</span> ` : ""}<span class="status-pill ${status.cls}">${status.label}</span></div>
 
       <div class="modal-grid">
         <div><div class="k">Account number</div><div class="v">${escapeHtml(alert.account_number)}</div></div>
@@ -451,18 +646,27 @@
         <div><div class="k">Alert type</div><div class="v">${escapeHtml(alert.alert_type)}</div></div>
         <div><div class="k">Last bill date</div><div class="v">${escapeHtml(alert.last_bill_date) || "—"}</div></div>
         <div><div class="k">Last bill due</div><div class="v">${escapeHtml(alert.last_bill_due_date) || "—"}</div></div>
+        <div><div class="k">Days since last bill</div><div class="v">${alert.days_since_last_bill != null ? alert.days_since_last_bill : "—"}</div></div>
+        <div><div class="k">On alert for</div><div class="v">${alert.days_alerted != null ? alert.days_alerted + " days" : "—"}</div></div>
       </div>
 
       ${instructions ? `<div class="modal-field"><label>Account instructions</label><div class="modal-readonly">${instructions}</div></div>` : ""}
 
+      ${(() => { const latest = displayNote(alert.latest_account_note, null); return latest ? `<div class="modal-field"><label>Latest V5 note</label><div class="modal-readonly">${escapeHtml(latest)}</div></div>` : ""; })()}
+
       <div class="modal-field">
-        <label>Notes</label>
+        <label><input type="checkbox" id="modalBillPulledInput" ${alert.bill_pulled ? "checked" : ""} ${alert.entered ? "disabled" : ""}> Bill pulled</label>
+        ${alert.entered ? `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;">Already entered — bill pulled status no longer applies.</div>` : ""}
+      </div>
+
+      <div class="modal-field">
+        <label>Team notes</label>
         <textarea id="modalNotesInput">${escapeHtml(alert.alert_notes || "")}</textarea>
       </div>
 
       <div class="modal-field">
         <label>Assigned to</label>
-        <input type="text" id="modalAssignedInput" placeholder="name@muc-corp.com" value="${escapeHtml(alert.assigned_to || "")}">
+        <select id="modalAssignedInput">${buildAssigneeOptions(alert.assigned_to || "")}</select>
       </div>
 
       <div class="modal-actions">
@@ -485,6 +689,8 @@
       const statusEl = document.getElementById("modalSaveStatus");
       const notes = document.getElementById("modalNotesInput").value;
       const assignedTo = document.getElementById("modalAssignedInput").value.trim();
+      const billPulledEl = document.getElementById("modalBillPulledInput");
+      const billPulled = billPulledEl.disabled ? alert.bill_pulled : billPulledEl.checked;
 
       statusEl.textContent = "Saving…";
       try {
@@ -493,7 +699,8 @@
           body: JSON.stringify({
             alert_notes: notes,
             assigned_to: assignedTo || null,
-            assigned_at: assignedTo ? new Date().toISOString() : null
+            assigned_at: assignedTo ? new Date().toISOString() : null,
+            bill_pulled: billPulled
           })
         });
         statusEl.textContent = "Saved";
@@ -525,8 +732,6 @@
     loadAlerts();
   });
 
-  document.getElementById("vendorSelect").addEventListener("change", loadAlerts);
-
   document.getElementById("clientSearch").addEventListener("input", () => {
     clearTimeout(clientSearchDebounce);
     clientSearchDebounce = setTimeout(loadAlerts, 350);
@@ -553,7 +758,7 @@
     setViewState(true);
     document.getElementById("whoLabel").textContent = account.username;
 
-    await Promise.all([loadMetrics(), loadVendors()]);
+    await Promise.all([loadMetrics(), loadVendors(), loadTeamMembers()]);
     await loadAlerts();
   }
 
