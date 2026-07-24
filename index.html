@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Alerts App</title>
+<title>Watchtower Alerts App</title>
+<link rel="icon" type="image/png" href="watchtower-icon-64.png">
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
@@ -22,6 +23,8 @@
     --entered-bg:#E4F6F1;
     --critical:#C4432E;
     --critical-bg:#FBE7E3;
+    --snoozed:#7C5CBF;
+    --snoozed-bg:#F1ECFB;
     --accent:#2B5FD9;
   }
   *{box-sizing:border-box;}
@@ -115,8 +118,10 @@
   .status-pill.pulled{ background:var(--pulled-bg); color:var(--pulled); }
   .status-pill.entered{ background:var(--entered-bg); color:var(--entered); }
   .status-pill.critical{ background:var(--critical-bg); color:var(--critical); }
+  .status-pill.snoozed{ background:var(--snoozed-bg); color:var(--snoozed); }
 
   .card.is-critical{ border-left-color:var(--critical); }
+  .card.status-snoozed{ border-left-color:var(--snoozed); }
 
   .card h3{ font-size:15px; margin:8px 0 1px; font-family:'Space Grotesk'; font-weight:600; }
   .vendor{ font-size:12.5px; color:var(--muted); margin:0 0 10px; }
@@ -143,7 +148,16 @@
     background:var(--ink); color:#fff; border:none; padding:6px 12px; border-radius:7px;
     font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;
   }
-  .card-footer{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
+  .card-footer{
+    display:flex; justify-content:flex-end; align-items:center; margin-top:11px;
+    padding-top:9px; border-top:1px dashed var(--border);
+  }
+  .snooze-btn{
+    font-size:11.5px; font-weight:600; border-radius:7px; padding:5px 11px; cursor:pointer;
+    font-family:inherit; border:1px solid var(--snoozed); background:#fff; color:var(--snoozed);
+  }
+  .snooze-btn:hover{ background:var(--snoozed-bg); }
+  .snooze-btn.active{ background:var(--snoozed); color:#fff; }
   .keystone-link{
     font-size:11.5px; font-weight:600; color:var(--accent); text-decoration:none; cursor:pointer;
     display:flex; align-items:center; gap:4px; background:none; border:none; font-family:inherit; padding:0;
@@ -200,6 +214,23 @@
     border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
   }
 
+  /* ---- Popup (replaces window.alert) ---- */
+  #popupOverlay{
+    display:none; position:fixed; inset:0; background:rgba(24,33,47,.45);
+    align-items:center; justify-content:center; padding:16px; z-index:200;
+  }
+  #popupOverlay.show{ display:flex; }
+  .popup{
+    background:var(--surface); border-radius:14px; max-width:380px; width:100%;
+    padding:20px 22px; box-shadow:0 10px 40px rgba(24,33,47,.25); text-align:center;
+  }
+  .popup-message{ font-size:13.5px; line-height:1.5; margin:0 0 16px; }
+  .popup button{
+    background:var(--accent); color:#fff; border:none; padding:8px 20px; border-radius:8px;
+    font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
+  .popup button:hover{ background:#3a6ef0; }
+
   /* ---- Lead mode toggle ---- */
   .lead-toggle{
     display:flex; align-items:center; gap:9px; background:var(--surface); border:1px solid var(--border);
@@ -228,6 +259,8 @@
   }
   .batchbar button:hover{ background:#3a6ef0; }
   .batchbar button:disabled{ opacity:.5; cursor:not-allowed; }
+  .batchbar .snooze-btn{ background:var(--snoozed); color:#fff; border:none; }
+  .batchbar .snooze-btn:hover{ background:#6d4fa8; }
 
   .card-check{ display:none; margin-right:6px; }
   .gallery.lead-mode .card-check{ display:inline-block; }
@@ -317,17 +350,23 @@
         <div class="status-seg" id="statusSeg">
           <button data-status="Active" class="active">Active</button>
           <button data-status="Critical">Critical</button>
+          <button data-status="Bill Pulled">Bill Pulled</button>
           <button data-status="Entered">Entered</button>
+          <button data-status="Snoozed">Snoozed</button>
           <button data-status="All">All</button>
         </div>
       </div>
     </div>
 
     <div class="batchbar" id="batchBar">
+      <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+      <input type="checkbox" id="selectAllCheckbox"> Select all
+      </label>
       <strong id="batchCount">0 selected</strong>
       <div class="assignField">
         <select id="batchAssignInput"></select>
         <button id="batchAssignBtn" disabled>Assign selected</button>
+        <button id="batchSnoozeBtn" class="snooze-btn" disabled>Snooze selected</button>
       </div>
     </div>
 
@@ -337,6 +376,13 @@
 
   <div id="modalOverlay">
     <div class="modal" id="modalContent"></div>
+  </div>
+
+  <div id="popupOverlay">
+    <div class="popup">
+      <p class="popup-message" id="popupMessage"></p>
+      <button id="popupOkBtn">OK</button>
+    </div>
   </div>
 
 <script>
@@ -424,16 +470,17 @@
   function renderCard(alert) {
     const status = statusInfo(alert);
     const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= 65);
+    const isSnoozed = !!alert.snoozed_today;
 
     return `
-      <div class="card status-${status.cls} ${isCritical ? "is-critical" : ""}" data-id="${alert.id}">
+      <div class="card status-${status.cls} ${isCritical ? "is-critical" : ""} ${isSnoozed ? "status-snoozed" : ""}" data-id="${alert.id}">
         <div class="card-top">
           <span>
             <input type="checkbox" class="card-check" data-id="${alert.id}">
             <span class="client-code">${escapeHtml(alert.client_code)}</span>
           </span>
           <span class="pill-group">
-            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>
+            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>
           </span>
         </div>
         <h3>${escapeHtml(alert.client_name)}</h3>
@@ -442,6 +489,10 @@
         <div class="card-row"><span>Last bill</span><span>${escapeHtml(alert.last_bill_date) || "—"}</span></div>
         <div class="card-row"><span>Billing</span><span>${escapeHtml(alert.billing_period) || "—"}</span></div>
         ${alert.days_alerted != null ? `<div class="card-row"><span>On alert</span><span>${alert.days_alerted}d</span></div>` : ""}
+        ${!alert.entered && (!isCritical || isSnoozed) ? `
+        <div class="card-footer">
+          <button class="snooze-btn ${isSnoozed ? "active" : ""}" data-id="${alert.id}" data-snoozed="${isSnoozed}">${isSnoozed ? "Unsnooze" : "Snooze"}</button>
+        </div>` : ""}
       </div>
     `;
   }
@@ -560,11 +611,33 @@
     }
   }
 
-  document.getElementById("gallery").addEventListener("click", (e) => {
+  document.getElementById("gallery").addEventListener("click", async (e) => {
     if (e.target.classList.contains("card-check")) {
       const id = e.target.dataset.id;
       if (e.target.checked) selectedIds.add(id); else selectedIds.delete(id);
       updateBatchBar();
+      return;
+    }
+    if (e.target.classList.contains("snooze-btn")) {
+      e.stopPropagation();
+      const id = e.target.dataset.id;
+      const nextSnoozed = e.target.dataset.snoozed !== "true";
+      e.target.disabled = true;
+      try {
+        await callApi(`/alerts/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ snoozed_today: nextSnoozed })
+        });
+        await Promise.all([loadAlerts(), loadMetrics()]);
+      } catch (err) {
+        e.target.disabled = false;
+        console.error("Snooze toggle failed", err);
+        if (err.message.includes("Cannot snooze a Critical alert")) {
+          showPopup("Critical alerts cannot be snoozed.");
+        } else {
+          showPopup("Couldn't update snooze state. Check console for details.");
+        }
+      }
       return;
     }
     const card = e.target.closest(".card");
@@ -576,13 +649,23 @@
   function updateBatchBar() {
     document.getElementById("batchCount").textContent = selectedIds.size + " selected";
     document.getElementById("batchAssignBtn").disabled = selectedIds.size === 0;
+    document.getElementById("batchSnoozeBtn").disabled = selectedIds.size === 0;
   }
-
+document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
+  const checkboxes = document.querySelectorAll(".card-check");
+  checkboxes.forEach(cb => {
+    cb.checked = e.target.checked;
+    if (e.target.checked) selectedIds.add(cb.dataset.id);
+    else selectedIds.delete(cb.dataset.id);
+  });
+  updateBatchBar();
+});
   document.getElementById("leadModeInput").addEventListener("change", (e) => {
     leadMode = e.target.checked;
     document.getElementById("gallery").classList.toggle("lead-mode", leadMode);
     document.getElementById("batchBar").classList.toggle("show", leadMode);
     selectedIds.clear();
+    document.getElementById("selectAllCheckbox").checked = false;
     updateBatchBar();
   });
 
@@ -613,7 +696,57 @@
       btn.textContent = "Assign selected";
       btn.disabled = false;
       console.error("Batch assign failed", err);
-      alert("Some assignments may have failed. Check console for details.");
+      showPopup("Some assignments may have failed. Check console for details.");
+    }
+  });
+
+  document.getElementById("batchSnoozeBtn").addEventListener("click", async () => {
+    if (selectedIds.size === 0) return;
+    const unsnoozing = statusFilter === "Snoozed";
+
+    let targetIds = Array.from(selectedIds);
+    let skippedCount = 0;
+    if (!unsnoozing) {
+      const criticalIds = new Set(
+        currentAlerts
+          .filter(a => !a.entered && a.days_since_last_bill != null && a.days_since_last_bill >= 65)
+          .map(a => String(a.id))
+      );
+      const filtered = targetIds.filter(id => !criticalIds.has(String(id)));
+      skippedCount = targetIds.length - filtered.length;
+      targetIds = filtered;
+    }
+
+    if (targetIds.length === 0) {
+      showPopup("Critical alerts cannot be snoozed.");
+      return;
+    }
+
+    const btn = document.getElementById("batchSnoozeBtn");
+    btn.disabled = true;
+    btn.textContent = unsnoozing ? "Unsnoozing…" : "Snoozing…";
+
+    try {
+      await Promise.all(
+        targetIds.map(id =>
+          callApi(`/alerts/${id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ snoozed_today: !unsnoozing })
+          })
+        )
+      );
+      selectedIds.clear();
+      updateBatchBar();
+      btn.textContent = unsnoozing ? "Unsnooze selected" : "Snooze selected";
+      await Promise.all([loadAlerts(), loadMetrics()]);
+      if (skippedCount > 0) {
+        showPopup(`${skippedCount} alert(s) skipped: Critical alerts cannot be snoozed.`);
+      }
+    } catch (err) {
+      btn.textContent = unsnoozing ? "Unsnooze selected" : "Snooze selected";
+      btn.disabled = selectedIds.size === 0;
+      console.error("Batch snooze failed", err);
+      showPopup("Some snooze updates may have failed. Check console for details.");
     }
   });
 
@@ -660,7 +793,7 @@
       </div>
 
       <div class="modal-field">
-        <label>Team notes</label>
+        <label>Add V5 note</label>
         <textarea id="modalNotesInput">${escapeHtml(alert.alert_notes || "")}</textarea>
       </div>
 
@@ -720,8 +853,22 @@
     if (e.target.id === "modalOverlay") closeModal();
   });
 
+  function showPopup(message) {
+    document.getElementById("popupMessage").textContent = message;
+    document.getElementById("popupOverlay").classList.add("show");
+  }
+
+  function closePopup() {
+    document.getElementById("popupOverlay").classList.remove("show");
+  }
+
+  document.getElementById("popupOkBtn").addEventListener("click", closePopup);
+  document.getElementById("popupOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "popupOverlay") closePopup();
+  });
+
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeModal();
+    if (e.key === "Escape") { closeModal(); closePopup(); }
   });
 
   document.getElementById("statusSeg").addEventListener("click", (e) => {
@@ -729,6 +876,8 @@
     statusFilter = e.target.dataset.status;
     document.querySelectorAll("#statusSeg button").forEach(b => b.classList.remove("active"));
     e.target.classList.add("active");
+    document.getElementById("batchSnoozeBtn").textContent =
+      statusFilter === "Snoozed" ? "Unsnooze selected" : "Snooze selected";
     loadAlerts();
   });
 

@@ -37,7 +37,7 @@ def whoami(req: func.HttpRequest) -> func.HttpResponse:
 SQL_SERVER = "alerts-sql-server.database.windows.net"
 SQL_DATABASE = "alerts-db"
 
-def get_db_connection():
+def get_db_connection(upn: str = None):
     credential = DefaultAzureCredential()
     token = credential.get_token("https://database.windows.net/.default")
     token_bytes = token.token.encode("utf-16-le")
@@ -52,13 +52,31 @@ def get_db_connection():
 
     SQL_COPT_SS_ACCESS_TOKEN = 1256
     conn = pyodbc.connect(conn_str, attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_struct})
+
+    # Database-enforced RLS: stamp the SWA-authenticated UPN onto the session.
+    # The rls.fn_client_access predicate filters dbo.Alerts by this value
+    # (fail-closed: no stamp + shared function identity = no rows).
+    # @read_only=1 so nothing later in the session can overwrite it.
+    if upn:
+        cur = conn.cursor()
+        cur.execute(
+            "EXEC sp_set_session_context @key=N'upn', @value=?, @read_only=1;",
+            upn.lower(),
+        )
     return conn
 
 
 @app.route(route="vendors", methods=["GET"])
 def get_vendors(req: func.HttpRequest) -> func.HttpResponse:
+    email = get_caller_email(req)
+    if not email:
+        return func.HttpResponse(
+            json.dumps({"error": "Not authenticated"}),
+            status_code=401,
+            mimetype="application/json"
+        )
     try:
-        conn = get_db_connection()
+        conn = get_db_connection(email)
         cursor = conn.cursor()
         cursor.execute("SELECT vendor FROM DistinctVendors ORDER BY vendor ASC")
         vendors = [row[0] for row in cursor.fetchall()]
@@ -85,7 +103,7 @@ def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
         )
 
     try:
-        conn = get_db_connection()
+        conn = get_db_connection(email)
         cursor = conn.cursor()
 
         cursor.execute("SELECT client_code FROM Users WHERE v5_user = ?", email.lower())
@@ -99,7 +117,7 @@ def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
         query = f"""
             SELECT id, client_code, client_name, alert_type, vendor, account_number,
                    account_name, tax_id, billing_period, payment_method,
-                   account_instructions, latest_account_note, alert_notes, entered, bill_pulled,
+                   account_instructions, latest_account_note, alert_notes, entered, bill_pulled, snoozed_today,
                    last_bill_date, last_bill_due_date, assigned_to, assigned_at, v5_account_id,
                    days_since_last_bill, days_alerted
             FROM Alerts
@@ -110,11 +128,17 @@ def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
 
         status = req.params.get("status")
         if status == "Active":
-            query += " AND entered = 0"
+            query += " AND entered = 0 AND snoozed_today = 0"
         elif status == "Entered":
             query += " AND entered = 1"
         elif status == "Critical":
-            query += " AND entered = 0 AND days_since_last_bill >= 65"
+            query += " AND entered = 0 AND days_since_last_bill >= 65 AND snoozed_today = 0"
+        elif status == "Bill Pulled":
+            query += " AND entered = 0 AND bill_pulled = 1 AND snoozed_today = 0"
+        elif status == "Snoozed":
+            query += " AND snoozed_today = 1"
+        else:
+            query += " AND snoozed_today = 0"
 
         client_search = req.params.get("client_code_search")
         if client_search:
@@ -128,6 +152,8 @@ def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
                 vendor_placeholders = ",".join("?" for _ in vendor_list)
                 query += f" AND vendor IN ({vendor_placeholders})"
                 params.extend(vendor_list)
+
+        query += " ORDER BY client_code ASC, last_bill_date ASC"
 
         cursor.execute(query, params)
         columns = [col[0] for col in cursor.description]
@@ -154,7 +180,7 @@ def get_metrics(req: func.HttpRequest) -> func.HttpResponse:
         )
 
     try:
-        conn = get_db_connection()
+        conn = get_db_connection(email)
         cursor = conn.cursor()
 
         cursor.execute("SELECT client_code FROM Users WHERE v5_user = ?", email.lower())
@@ -170,8 +196,8 @@ def get_metrics(req: func.HttpRequest) -> func.HttpResponse:
         placeholders = ",".join("?" for _ in rls_codes)
         query = f"""
             SELECT
-                SUM(CASE WHEN entered = 0 AND bill_pulled = 0 THEN 1 ELSE 0 END) AS pending_count,
-                SUM(CASE WHEN entered = 0 AND days_since_last_bill >= 65 THEN 1 ELSE 0 END) AS critical_count,
+                SUM(CASE WHEN entered = 0 AND bill_pulled = 0 AND snoozed_today = 0 THEN 1 ELSE 0 END) AS pending_count,
+                SUM(CASE WHEN entered = 0 AND days_since_last_bill >= 65 AND snoozed_today = 0 THEN 1 ELSE 0 END) AS critical_count,
                 SUM(CASE WHEN entered = 1 THEN 1 ELSE 0 END) AS entered_count,
                 COUNT(*) AS total_count
             FROM Alerts
@@ -196,7 +222,7 @@ def get_metrics(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(json.dumps({"error": str(e)}), status_code=500, mimetype="application/json")
 
 
-ALLOWED_PATCH_FIELDS = {"alert_notes", "assigned_to", "assigned_at", "bill_pulled"}
+ALLOWED_PATCH_FIELDS = {"alert_notes", "assigned_to", "assigned_at", "bill_pulled", "snoozed_today"}
 
 @app.route(route="alerts/{id}", methods=["PATCH"])
 def patch_alert(req: func.HttpRequest) -> func.HttpResponse:
@@ -228,7 +254,7 @@ def patch_alert(req: func.HttpRequest) -> func.HttpResponse:
         )
 
     try:
-        conn = get_db_connection()
+        conn = get_db_connection(email)
         cursor = conn.cursor()
 
         cursor.execute("SELECT client_code FROM Users WHERE v5_user = ?", email.lower())
@@ -241,6 +267,32 @@ def patch_alert(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=403,
                 mimetype="application/json"
             )
+
+        if update_fields.get("snoozed_today"):
+            check_placeholders = ",".join("?" for _ in rls_codes)
+            cursor.execute(
+                f"""
+                    SELECT entered, days_since_last_bill FROM Alerts
+                    WHERE id = ? AND client_code IN ({check_placeholders})
+                """,
+                [alert_id] + rls_codes
+            )
+            target = cursor.fetchone()
+            if (target and target.entered == 0
+                    and target.days_since_last_bill is not None
+                    and target.days_since_last_bill >= 65):
+                conn.close()
+                return func.HttpResponse(
+                    json.dumps({"error": "Cannot snooze a Critical alert."}),
+                    status_code=400,
+                    mimetype="application/json"
+                )
+
+        # server-side author stamp: whoever writes/edits the note is recorded
+        # (notes_author is intentionally NOT client-patchable) — used by the
+        # nightly V5 write-back to append the '*<v5 user id>' suffix.
+        if "alert_notes" in update_fields:
+            update_fields["notes_author"] = email.lower()
 
         set_clause = ", ".join(f"{field} = ?" for field in update_fields)
         placeholders = ",".join("?" for _ in rls_codes)
@@ -284,7 +336,7 @@ def get_team_members(req: func.HttpRequest) -> func.HttpResponse:
         )
 
     try:
-        conn = get_db_connection()
+        conn = get_db_connection(email)
         cursor = conn.cursor()
 
         cursor.execute("SELECT client_code FROM Users WHERE v5_user = ?", email.lower())
