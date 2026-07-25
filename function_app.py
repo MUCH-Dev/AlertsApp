@@ -37,8 +37,13 @@ def whoami(req: func.HttpRequest) -> func.HttpResponse:
 SQL_SERVER = "alerts-sql-server.database.windows.net"
 SQL_DATABASE = "alerts-db"
 
+# Reused across warm invocations so DefaultAzureCredential's own internal
+# token cache and successful-credential-type cache actually take effect —
+# a fresh instance per request defeats both and re-probes the full chain
+# every time.
+credential = DefaultAzureCredential()
+
 def get_db_connection(upn: str = None):
-    credential = DefaultAzureCredential()
     token = credential.get_token("https://database.windows.net/.default")
     token_bytes = token.token.encode("utf-16-le")
     token_struct = len(token_bytes).to_bytes(4, byteorder="little") + token_bytes
