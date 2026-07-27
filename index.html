@@ -328,6 +328,14 @@
         </div>
       </div>
       <div class="field">
+        <label>Alert type</label>
+        <div class="status-seg" id="typeSeg">
+          <button data-type="Billable">Billable</button>
+          <button data-type="Supply">Supply</button>
+          <button data-type="All" class="active">All</button>
+        </div>
+      </div>
+      <div class="field">
         <label>Status</label>
         <div class="status-seg" id="statusSeg">
           <button data-status="Active" class="active">Active</button>
@@ -389,6 +397,7 @@
   }
 
   let statusFilter = "Active";
+  let typeFilter = "All";
   let clientSearchDebounce = null;
   let currentAlerts = [];
   let selectedIds = new Set();
@@ -581,6 +590,7 @@
 
     const params = new URLSearchParams();
     if (statusFilter !== "All") params.set("status", statusFilter);
+    if (typeFilter !== "All") params.set("alert_type", typeFilter);
     const clientSearch = document.getElementById("clientSearch").value.trim();
     if (clientSearch) params.set("client_code_search", clientSearch);
     if (selectedVendors.size > 0) params.set("vendor", Array.from(selectedVendors).join(","));
@@ -851,6 +861,14 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { closeModal(); closePopup(); }
+  });
+
+  document.getElementById("typeSeg").addEventListener("click", (e) => {
+    if (e.target.tagName !== "BUTTON") return;
+    typeFilter = e.target.dataset.type;
+    document.querySelectorAll("#typeSeg button").forEach(b => b.classList.remove("active"));
+    e.target.classList.add("active");
+    loadAlerts();
   });
 
   document.getElementById("statusSeg").addEventListener("click", (e) => {

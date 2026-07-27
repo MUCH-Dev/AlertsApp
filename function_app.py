@@ -158,6 +158,11 @@ def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
                 query += f" AND vendor IN ({vendor_placeholders})"
                 params.extend(vendor_list)
 
+        alert_type_param = req.params.get("alert_type")
+        if alert_type_param:
+            query += " AND UPPER(alert_type) = UPPER(?)"
+            params.append(alert_type_param)
+
         query += " ORDER BY client_code ASC, last_bill_date ASC"
 
         cursor.execute(query, params)
