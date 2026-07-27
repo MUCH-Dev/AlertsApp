@@ -163,6 +163,11 @@ def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
             query += " AND UPPER(alert_type) = UPPER(?)"
             params.append(alert_type_param)
 
+        account_search = req.params.get("account_number_search")
+        if account_search:
+            query += " AND account_number LIKE ?"
+            params.append("%" + account_search + "%")
+
         query += " ORDER BY client_code ASC, last_bill_date ASC"
 
         cursor.execute(query, params)

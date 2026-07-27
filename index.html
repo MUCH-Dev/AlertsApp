@@ -81,6 +81,7 @@
   .filterbar{
     background:var(--surface); border:1px solid var(--border); border-radius:12px;
     padding:14px 16px; margin-bottom:18px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;
+    justify-content:center;
   }
   .field{ display:flex; flex-direction:column; gap:4px; }
   .field label{ font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:600; }
@@ -328,6 +329,10 @@
         </div>
       </div>
       <div class="field">
+        <label>Account number</label>
+        <input type="text" id="accountSearch" placeholder="Search…">
+      </div>
+      <div class="field">
         <label>Alert type</label>
         <div class="status-seg" id="typeSeg">
           <button data-type="Billable">Billable</button>
@@ -399,6 +404,7 @@
   let statusFilter = "Active";
   let typeFilter = "All";
   let clientSearchDebounce = null;
+  let accountSearchDebounce = null;
   let currentAlerts = [];
   let selectedIds = new Set();
   let teamMembers = [];
@@ -593,6 +599,8 @@
     if (typeFilter !== "All") params.set("alert_type", typeFilter);
     const clientSearch = document.getElementById("clientSearch").value.trim();
     if (clientSearch) params.set("client_code_search", clientSearch);
+    const accountSearch = document.getElementById("accountSearch").value.trim();
+    if (accountSearch) params.set("account_number_search", accountSearch);
     if (selectedVendors.size > 0) params.set("vendor", Array.from(selectedVendors).join(","));
 
     try {
@@ -884,6 +892,11 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
   document.getElementById("clientSearch").addEventListener("input", () => {
     clearTimeout(clientSearchDebounce);
     clientSearchDebounce = setTimeout(loadAlerts, 350);
+  });
+
+  document.getElementById("accountSearch").addEventListener("input", () => {
+    clearTimeout(accountSearchDebounce);
+    accountSearchDebounce = setTimeout(loadAlerts, 350);
   });
 
   document.getElementById("loginBtn").addEventListener("click", () => {
