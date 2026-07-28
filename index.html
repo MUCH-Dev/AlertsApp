@@ -169,6 +169,8 @@
 
   .empty-state, .loading-state{ text-align:center; padding:50px 20px; color:var(--muted); font-size:13.5px; grid-column:1/-1; }
 
+  .view-total{ margin-top:14px; font-size:12.5px; color:var(--ink); }
+
   /* ---- Detail modal ---- */
   #modalOverlay{
     display:none; position:fixed; inset:0; background:rgba(24,33,47,.45);
@@ -366,6 +368,8 @@
     </div>
 
     <div class="gallery lead-mode" id="gallery"></div>
+
+    <div class="view-total" id="viewTotal"></div>
 
   </div>
 
@@ -608,11 +612,14 @@
       currentAlerts = alerts;
       if (alerts.length === 0) {
         gallery.innerHTML = `<div class="empty-state">No alerts match these filters.</div>`;
+        document.getElementById("viewTotal").textContent = "Total: 0";
         return;
       }
       gallery.innerHTML = alerts.map(renderCard).join("");
+      document.getElementById("viewTotal").textContent = "Total: " + alerts.length;
     } catch (e) {
       gallery.innerHTML = `<div class="empty-state">Couldn't load alerts: ${escapeHtml(e.message)}</div>`;
+      document.getElementById("viewTotal").textContent = "";
     }
   }
 
