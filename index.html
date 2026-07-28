@@ -503,9 +503,20 @@
     `;
   }
 
+  function buildFilterParams() {
+    const params = new URLSearchParams();
+    if (typeFilter !== "All") params.set("alert_type", typeFilter);
+    const clientSearch = document.getElementById("clientSearch").value.trim();
+    if (clientSearch) params.set("client_code_search", clientSearch);
+    const accountSearch = document.getElementById("accountSearch").value.trim();
+    if (accountSearch) params.set("account_number_search", accountSearch);
+    if (selectedVendors.size > 0) params.set("vendor", Array.from(selectedVendors).join(","));
+    return params;
+  }
+
   async function loadMetrics() {
     try {
-      const m = await callApi("/metrics");
+      const m = await callApi("/metrics?" + buildFilterParams().toString());
       document.getElementById("metricPending").textContent = m.pending_count;
       document.getElementById("metricCritical").textContent = m.critical_count;
       document.getElementById("metricEntered").textContent = m.entered_count;
@@ -566,6 +577,7 @@
     if (e.target.checked) selectedVendors.add(v); else selectedVendors.delete(v);
     renderVendorChips();
     loadAlerts();
+    loadMetrics();
   });
 
   document.getElementById("vendorChips").addEventListener("click", (e) => {
@@ -575,6 +587,7 @@
     renderVendorChips();
     renderVendorPanel(vendorSearchInput.value);
     loadAlerts();
+    loadMetrics();
   });
 
   document.addEventListener("click", (e) => {
@@ -598,14 +611,8 @@
     const gallery = document.getElementById("gallery");
     gallery.innerHTML = `<div class="loading-state">Loading alerts…</div>`;
 
-    const params = new URLSearchParams();
+    const params = buildFilterParams();
     if (statusFilter !== "All") params.set("status", statusFilter);
-    if (typeFilter !== "All") params.set("alert_type", typeFilter);
-    const clientSearch = document.getElementById("clientSearch").value.trim();
-    if (clientSearch) params.set("client_code_search", clientSearch);
-    const accountSearch = document.getElementById("accountSearch").value.trim();
-    if (accountSearch) params.set("account_number_search", accountSearch);
-    if (selectedVendors.size > 0) params.set("vendor", Array.from(selectedVendors).join(","));
 
     try {
       const alerts = await callApi("/alerts?" + params.toString());
@@ -884,6 +891,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     document.querySelectorAll("#typeSeg button").forEach(b => b.classList.remove("active"));
     e.target.classList.add("active");
     loadAlerts();
+    loadMetrics();
   });
 
   document.getElementById("statusSeg").addEventListener("click", (e) => {
@@ -898,12 +906,12 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
 
   document.getElementById("clientSearch").addEventListener("input", () => {
     clearTimeout(clientSearchDebounce);
-    clientSearchDebounce = setTimeout(loadAlerts, 350);
+    clientSearchDebounce = setTimeout(() => { loadAlerts(); loadMetrics(); }, 350);
   });
 
   document.getElementById("accountSearch").addEventListener("input", () => {
     clearTimeout(accountSearchDebounce);
-    accountSearchDebounce = setTimeout(loadAlerts, 350);
+    accountSearchDebounce = setTimeout(() => { loadAlerts(); loadMetrics(); }, 350);
   });
 
   document.getElementById("loginBtn").addEventListener("click", () => {
