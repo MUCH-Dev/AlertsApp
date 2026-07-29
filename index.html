@@ -97,6 +97,31 @@
   }
   .status-seg button.active{ background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(24,33,47,.12); }
 
+  /* ---- View toggle ---- */
+  .view-toggle{ display:flex; background:#EEF1F5; border-radius:8px; padding:3px; gap:2px; margin-left:12px; }
+  .view-toggle button{
+    border:none; background:none; padding:6px 10px; border-radius:6px; font-size:14px;
+    color:var(--muted); cursor:pointer; font-family:inherit; line-height:1;
+  }
+  .view-toggle button.active{ background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(24,33,47,.12); }
+
+  /* ---- Grid (table) view ---- */
+  .table-scroll{ overflow:auto; max-height:calc(100vh - 220px); }
+  .grid-table{ width:100%; border-collapse:separate; border-spacing:0; background:var(--surface); border:1px solid var(--border); border-radius:12px; }
+  .grid-table thead th{
+    position:sticky; top:0; background:#F7F8FA; text-align:left; font-size:11px; color:var(--muted);
+    text-transform:uppercase; letter-spacing:.04em; padding:9px 10px; border-bottom:1px solid var(--border);
+  }
+  .grid-table tbody td{ padding:9px 10px; font-size:12.5px; border-bottom:1px solid var(--border); }
+  .grid-table tbody tr:last-child td{ border-bottom:none; }
+  .grid-table tbody tr:hover{ background:#F7F8FA; }
+  .grid-table td.mono{ font-family:'IBM Plex Mono'; font-size:12px; }
+  .row-card td:first-child{ border-left:4px solid var(--pending); }
+  .row-card.status-pulled td:first-child{ border-left-color:var(--pulled); }
+  .row-card.status-entered td:first-child{ border-left-color:var(--entered); }
+  .row-card.is-critical td:first-child{ border-left-color:var(--critical); }
+  .row-card.status-snoozed td:first-child{ border-left-color:var(--snoozed); }
+
   /* ---- Gallery ---- */
   .gallery{ display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px; }
   .card{
@@ -256,6 +281,7 @@
 
   .card-check{ display:none; margin-right:6px; }
   .gallery.lead-mode .card-check{ display:inline-block; }
+  .grid-table .card-check{ display:inline-block; }
   .gallery.lead-mode .card-top{ align-items:center; }
 
   /* ---- Vendor combo box (searchable multi-select) ---- */
@@ -301,7 +327,11 @@
         <img src="logo.png" class="brand-mark" alt="Company logo">
         <div>
           <h1>Watchtower - Alerts App</h1>
-          <p>gallery view · Muc-corp</p>
+          <p id="viewSubtitle">gallery view · Muc-corp</p>
+        </div>
+        <div class="view-toggle" id="viewToggle">
+          <button type="button" data-view="gallery" class="active" aria-label="Gallery view">⊞</button>
+          <button type="button" data-view="table" aria-label="Grid view">☰</button>
         </div>
       </div>
       <div class="who">
@@ -369,6 +399,26 @@
 
     <div class="gallery lead-mode" id="gallery"></div>
 
+    <div class="table-scroll" id="gridWrap">
+      <table class="grid-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Client code</th>
+            <th>Client name</th>
+            <th>Vendor</th>
+            <th>Account #</th>
+            <th>Status</th>
+            <th>Last bill</th>
+            <th>Billing period</th>
+            <th>Days on alert</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="gridBody"></tbody>
+      </table>
+    </div>
+
     <div class="view-total" id="viewTotal"></div>
 
   </div>
@@ -414,10 +464,33 @@
   let teamMembers = [];
   let allVendors = [];
   let selectedVendors = new Set();
+  let viewMode = localStorage.getItem("alertsViewMode") === "table" ? "table" : "gallery";
 
   function setViewState(signedIn) {
     document.getElementById("signinScreen").style.display = signedIn ? "none" : "flex";
     document.getElementById("app").style.display = signedIn ? "block" : "none";
+  }
+
+  function applyViewMode() {
+    document.getElementById("gallery").style.display = viewMode === "gallery" ? "" : "none";
+    document.getElementById("gridWrap").style.display = viewMode === "table" ? "" : "none";
+    document.getElementById("viewSubtitle").textContent =
+      (viewMode === "table" ? "grid" : "gallery") + " view · Muc-corp";
+    document.querySelectorAll("#viewToggle button").forEach(b => {
+      b.classList.toggle("active", b.dataset.view === viewMode);
+      b.setAttribute("aria-pressed", b.dataset.view === viewMode ? "true" : "false");
+    });
+    if (currentAlerts.length === 0) {
+      activeListContainer().innerHTML = listMessageHtml("empty-state", "No alerts match these filters.");
+      const inactiveContainer = viewMode === "gallery" ? document.getElementById("gridBody") : document.getElementById("gallery");
+      inactiveContainer.innerHTML = "";
+    } else if (viewMode === "gallery") {
+      document.getElementById("gallery").innerHTML = currentAlerts.map(renderCard).join("");
+      document.getElementById("gridBody").innerHTML = "";
+    } else {
+      document.getElementById("gridBody").innerHTML = currentAlerts.map(renderRow).join("");
+      document.getElementById("gallery").innerHTML = "";
+    }
   }
 
   async function getToken() {
@@ -481,7 +554,7 @@
       <div class="card status-${status.cls} ${isCritical ? "is-critical" : ""} ${isSnoozed ? "status-snoozed" : ""}" data-id="${alert.id}">
         <div class="card-top">
           <span>
-            <input type="checkbox" class="card-check" data-id="${alert.id}">
+            <input type="checkbox" class="card-check" data-id="${alert.id}" ${selectedIds.has(String(alert.id)) ? "checked" : ""}>
             <span class="client-code">${escapeHtml(alert.client_code)}</span>
           </span>
           <span class="pill-group">
@@ -500,6 +573,33 @@
           <button class="snooze-btn ${isSnoozed ? "active" : ""}" data-id="${alert.id}" data-snoozed="${isSnoozed}">${isSnoozed ? "Unsnooze" : "Snooze"}</button>
         </div>` : ""}
       </div>
+    `;
+  }
+
+  function renderRow(alert) {
+    const status = statusInfo(alert);
+    const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= 65);
+    const isSnoozed = !!alert.snoozed_today;
+
+    return `
+      <tr class="row-card status-${status.cls} ${isCritical ? "is-critical" : ""} ${isSnoozed ? "status-snoozed" : ""}" data-id="${alert.id}">
+        <td><input type="checkbox" class="card-check" data-id="${alert.id}" ${selectedIds.has(String(alert.id)) ? "checked" : ""}></td>
+        <td class="mono">${escapeHtml(alert.client_code)}</td>
+        <td>${escapeHtml(alert.client_name)}</td>
+        <td>${escapeHtml(alert.vendor)}</td>
+        <td class="mono">${alert.account_number ? escapeHtml(alert.account_number) : "—"}</td>
+        <td>
+          <span class="pill-group">
+            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>
+          </span>
+        </td>
+        <td class="mono">${escapeHtml(alert.last_bill_date) || "—"}</td>
+        <td class="mono">${escapeHtml(alert.billing_period) || "—"}</td>
+        <td class="mono">${alert.days_alerted != null ? alert.days_alerted + "d" : "—"}</td>
+        <td>
+          ${!alert.entered && (!isCritical || isSnoozed) ? `<button class="snooze-btn ${isSnoozed ? "active" : ""}" data-id="${alert.id}" data-snoozed="${isSnoozed}">${isSnoozed ? "Unsnooze" : "Snooze"}</button>` : ""}
+        </td>
+      </tr>
     `;
   }
 
@@ -607,9 +707,18 @@
     }
   }
 
+  function activeListContainer() {
+    return viewMode === "gallery" ? document.getElementById("gallery") : document.getElementById("gridBody");
+  }
+
+  function listMessageHtml(cls, message) {
+    return viewMode === "gallery"
+      ? `<div class="${cls}">${message}</div>`
+      : `<tr><td colspan="10" class="${cls}">${message}</td></tr>`;
+  }
+
   async function loadAlerts() {
-    const gallery = document.getElementById("gallery");
-    gallery.innerHTML = `<div class="loading-state">Loading alerts…</div>`;
+    activeListContainer().innerHTML = listMessageHtml("loading-state", "Loading alerts…");
 
     const params = buildFilterParams();
     if (statusFilter !== "All") params.set("status", statusFilter);
@@ -618,19 +727,20 @@
       const alerts = await callApi("/alerts?" + params.toString());
       currentAlerts = alerts;
       if (alerts.length === 0) {
-        gallery.innerHTML = `<div class="empty-state">No alerts match these filters.</div>`;
+        activeListContainer().innerHTML = listMessageHtml("empty-state", "No alerts match these filters.");
         document.getElementById("viewTotal").textContent = "Total: 0";
         return;
       }
-      gallery.innerHTML = alerts.map(renderCard).join("");
+      applyViewMode();
       document.getElementById("viewTotal").textContent = "Total: " + alerts.length;
     } catch (e) {
-      gallery.innerHTML = `<div class="empty-state">Couldn't load alerts: ${escapeHtml(e.message)}</div>`;
+      currentAlerts = [];
+      activeListContainer().innerHTML = listMessageHtml("empty-state", `Couldn't load alerts: ${escapeHtml(e.message)}`);
       document.getElementById("viewTotal").textContent = "";
     }
   }
 
-  document.getElementById("gallery").addEventListener("click", async (e) => {
+  async function handleAlertContainerClick(e) {
     if (e.target.classList.contains("card-check")) {
       const id = e.target.dataset.id;
       if (e.target.checked) selectedIds.add(id); else selectedIds.delete(id);
@@ -659,11 +769,14 @@
       }
       return;
     }
-    const card = e.target.closest(".card");
-    if (!card) return;
-    const alert = currentAlerts.find(a => String(a.id) === card.dataset.id);
+    const item = e.target.closest(".card, .row-card");
+    if (!item) return;
+    const alert = currentAlerts.find(a => String(a.id) === item.dataset.id);
     if (alert) openModal(alert);
-  });
+  }
+
+  document.getElementById("gallery").addEventListener("click", handleAlertContainerClick);
+  document.getElementById("gridBody").addEventListener("click", handleAlertContainerClick);
 
   function updateBatchBar() {
     document.getElementById("batchCount").textContent = selectedIds.size + " selected";
@@ -903,6 +1016,16 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
       statusFilter === "Snoozed" ? "Unsnooze selected" : "Snooze selected";
     loadAlerts();
   });
+
+  document.getElementById("viewToggle").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-view]");
+    if (!btn) return;
+    viewMode = btn.dataset.view;
+    localStorage.setItem("alertsViewMode", viewMode);
+    applyViewMode();
+  });
+
+  applyViewMode();
 
   document.getElementById("clientSearch").addEventListener("input", () => {
     clearTimeout(clientSearchDebounce);
