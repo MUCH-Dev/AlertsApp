@@ -85,7 +85,7 @@
   }
   .field{ display:flex; flex-direction:column; gap:4px; }
   .field label{ font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:600; }
-  .field input, .field select{
+  .field input:not([type="checkbox"]), .field select{
     border:1px solid var(--border); border-radius:8px; padding:7px 10px; font-size:13.5px;
     font-family:inherit; background:#fff; color:var(--ink); min-width:150px;
   }
@@ -271,7 +271,7 @@
     padding:0; display:flex;
   }
   .combo-panel{
-    display:none; position:absolute; top:100%; left:0; margin-top:4px; width:320px; max-height:260px;
+    display:none; position:absolute; top:100%; left:0; margin-top:4px; width:240px; max-height:260px;
     overflow-y:auto; overflow-x:hidden; background:#fff; border:1px solid var(--border); border-radius:8px;
     box-shadow:0 6px 20px rgba(24,33,47,.14); z-index:20;
   }
