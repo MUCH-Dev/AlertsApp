@@ -2,11 +2,20 @@ import azure.functions as func
 import base64
 import json
 import datetime
+import os
 import pyodbc
 from azure.identity import DefaultAzureCredential
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
+# Mirror of criticalThresholdDays() in index.html — keep in sync
+CRITICAL_THRESHOLD_SQL = """
+    CASE
+        WHEN LOWER(LTRIM(RTRIM(billing_period))) = 'monthly' THEN 45
+        WHEN LOWER(LTRIM(RTRIM(billing_period))) = 'quarterly' THEN 75
+        ELSE 65
+    END
+"""
 
 def get_caller_email(req: func.HttpRequest):
     principal_header = req.headers.get("X-MS-CLIENT-PRINCIPAL")
@@ -34,8 +43,11 @@ def whoami(req: func.HttpRequest) -> func.HttpResponse:
     return func.HttpResponse(json.dumps({"email": email}, indent=2), mimetype="application/json")
 
 
-SQL_SERVER = "alerts-sql-server.database.windows.net"
-SQL_DATABASE = "alerts-db"
+def get_sql_config():
+    return (
+        os.environ.get("SQL_SERVER", "alerts-sql-server.database.windows.net"),
+        os.environ.get("SQL_DATABASE", "alerts-db"),
+    )
 
 # Reused across warm invocations so DefaultAzureCredential's own internal
 # token cache and successful-credential-type cache actually take effect —
@@ -44,14 +56,15 @@ SQL_DATABASE = "alerts-db"
 credential = DefaultAzureCredential()
 
 def get_db_connection(upn: str = None):
+    sql_server, sql_database = get_sql_config()
     token = credential.get_token("https://database.windows.net/.default")
     token_bytes = token.token.encode("utf-16-le")
     token_struct = len(token_bytes).to_bytes(4, byteorder="little") + token_bytes
 
     conn_str = (
         f"Driver={{ODBC Driver 18 for SQL Server}};"
-        f"Server=tcp:{SQL_SERVER},1433;"
-        f"Database={SQL_DATABASE};"
+        f"Server=tcp:{sql_server},1433;"
+        f"Database={sql_database};"
         f"Encrypt=yes;TrustServerCertificate=no;"
     )
 
@@ -137,7 +150,7 @@ def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
         elif status == "Entered":
             query += " AND entered = 1"
         elif status == "Critical":
-            query += " AND entered = 0 AND days_since_last_bill >= 65 AND snoozed_today = 0"
+            query += f" AND entered = 0 AND days_since_last_bill >= ({CRITICAL_THRESHOLD_SQL}) AND snoozed_today = 0"
         elif status == "Bill Pulled":
             query += " AND entered = 0 AND bill_pulled = 1 AND snoozed_today = 0"
         elif status == "Snoozed":
@@ -212,14 +225,39 @@ def get_metrics(req: func.HttpRequest) -> func.HttpResponse:
         query = f"""
             SELECT
                 SUM(CASE WHEN entered = 0 AND bill_pulled = 0 AND snoozed_today = 0 THEN 1 ELSE 0 END) AS pending_count,
-                SUM(CASE WHEN entered = 0 AND days_since_last_bill >= 65 AND snoozed_today = 0 THEN 1 ELSE 0 END) AS critical_count,
+                SUM(CASE WHEN entered = 0 AND days_since_last_bill >= ({CRITICAL_THRESHOLD_SQL}) AND snoozed_today = 0 THEN 1 ELSE 0 END) AS critical_count,
                 SUM(CASE WHEN entered = 1 THEN 1 ELSE 0 END) AS entered_count,
                 COUNT(*) AS total_count
             FROM Alerts
             WHERE load_date = CAST(GETDATE() AS DATE)
               AND client_code IN ({placeholders})
         """
-        cursor.execute(query, rls_codes)
+        params = list(rls_codes)
+
+        client_search = req.params.get("client_code_search")
+        if client_search:
+            query += " AND client_code LIKE ?"
+            params.append(client_search + "%")
+
+        vendor_param = req.params.get("vendor")
+        if vendor_param:
+            vendor_list = [v.strip() for v in vendor_param.split(",") if v.strip()]
+            if vendor_list:
+                vendor_placeholders = ",".join("?" for _ in vendor_list)
+                query += f" AND vendor IN ({vendor_placeholders})"
+                params.extend(vendor_list)
+
+        alert_type_param = req.params.get("alert_type")
+        if alert_type_param:
+            query += " AND UPPER(alert_type) = UPPER(?)"
+            params.append(alert_type_param)
+
+        account_search = req.params.get("account_number_search")
+        if account_search:
+            query += " AND account_number LIKE ?"
+            params.append("%" + account_search + "%")
+
+        cursor.execute(query, params)
         row = cursor.fetchone()
         conn.close()
 
@@ -287,15 +325,16 @@ def patch_alert(req: func.HttpRequest) -> func.HttpResponse:
             check_placeholders = ",".join("?" for _ in rls_codes)
             cursor.execute(
                 f"""
-                    SELECT entered, days_since_last_bill FROM Alerts
+                    SELECT entered,
+                           CASE WHEN days_since_last_bill >= ({CRITICAL_THRESHOLD_SQL})
+                                THEN 1 ELSE 0 END AS is_critical
+                    FROM Alerts
                     WHERE id = ? AND client_code IN ({check_placeholders})
                 """,
                 [alert_id] + rls_codes
             )
             target = cursor.fetchone()
-            if (target and target.entered == 0
-                    and target.days_since_last_bill is not None
-                    and target.days_since_last_bill >= 65):
+            if target and target.entered == 0 and target.is_critical:
                 conn.close()
                 return func.HttpResponse(
                     json.dumps({"error": "Cannot snooze a Critical alert."}),
