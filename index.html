@@ -545,9 +545,17 @@
     return { cls: "pending", label: "Pending" };
   }
 
+  // Mirror of CRITICAL_THRESHOLD_SQL in function_app.py — keep in sync
+  function criticalThresholdDays(alert) {
+    const period = String(alert.billing_period || "").trim().toLowerCase();
+    if (period === "monthly") return 45;
+    if (period === "quarterly") return 75;
+    return 65;
+  }
+
   function renderCard(alert) {
     const status = statusInfo(alert);
-    const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= 65);
+    const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= criticalThresholdDays(alert));
     const isSnoozed = !!alert.snoozed_today;
 
     return `
@@ -578,7 +586,7 @@
 
   function renderRow(alert) {
     const status = statusInfo(alert);
-    const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= 65);
+    const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= criticalThresholdDays(alert));
     const isSnoozed = !!alert.snoozed_today;
 
     return `
@@ -832,7 +840,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     if (!unsnoozing) {
       const criticalIds = new Set(
         currentAlerts
-          .filter(a => !a.entered && a.days_since_last_bill != null && a.days_since_last_bill >= 65)
+          .filter(a => !a.entered && a.days_since_last_bill != null && a.days_since_last_bill >= criticalThresholdDays(a))
           .map(a => String(a.id))
       );
       const filtered = targetIds.filter(id => !criticalIds.has(String(id)));
@@ -883,7 +891,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
 
   function renderModal(alert) {
     const status = statusInfo(alert);
-    const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= 65);
+    const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= criticalThresholdDays(alert));
     const instructions = alert.account_instructions ? escapeHtml(alert.account_instructions) : "";
 
     return `
