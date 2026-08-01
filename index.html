@@ -115,7 +115,6 @@
   .grid-table tbody td{ padding:9px 10px; font-size:12.5px; border-bottom:1px solid var(--border); }
   .grid-table tbody tr:last-child td{ border-bottom:none; }
   .grid-table tbody tr:hover{ background:#F7F8FA; }
-  .grid-table td.mono{ font-family:'IBM Plex Mono'; font-size:12px; }
   .row-card td:first-child{ border-left:4px solid var(--pending); }
   .row-card.status-pulled td:first-child{ border-left-color:var(--pulled); }
   .row-card.status-entered td:first-child{ border-left-color:var(--entered); }
@@ -135,8 +134,12 @@
 
   .card-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
   .client-code{
-    font-family:'IBM Plex Mono'; font-size:11.5px; background:#EEF1F5; color:var(--muted);
+    font-size:11.5px; background:#EEF1F5; color:var(--muted);
     padding:2px 7px; border-radius:5px; letter-spacing:.02em;
+  }
+  .assignee-badge{
+    font-size:11px; font-weight:600; background:#EEF1F5; color:var(--muted);
+    padding:2px 7px; border-radius:5px;
   }
   .status-pill{ font-size:11px; font-weight:700; border-radius:12px; padding:3px 10px; white-space:nowrap; }
   .pill-group{ display:flex; gap:6px; align-items:center; }
@@ -155,7 +158,7 @@
 
   .card-row{ display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:3px; }
   .card-row span:first-child{ color:var(--muted); }
-  .card-row span:last-child{ font-weight:600; font-family:'IBM Plex Mono'; font-size:12px; }
+  .card-row span:last-child{ font-weight:600; font-size:12px; }
 
   .notes{
     font-size:12px; color:var(--muted); margin:10px 0 0; padding:8px 10px; background:#F7F8FA;
@@ -215,7 +218,7 @@
     display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; font-size:13px; margin-bottom:16px;
   }
   .modal-grid .k{ color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:1px; }
-  .modal-grid .v{ font-family:'IBM Plex Mono'; font-size:12.5px; }
+  .modal-grid .v{ font-size:12.5px; }
 
   .modal-field{ margin-bottom:14px; }
   .modal-field label{
@@ -409,6 +412,7 @@
             <th>Vendor</th>
             <th>Account #</th>
             <th>Status</th>
+            <th>Assigned</th>
             <th>Last bill</th>
             <th>Billing period</th>
             <th>Days on alert</th>
@@ -450,10 +454,12 @@
   };
   const msalInstance = new msal.PublicClientApplication(msalConfig);
 
-  const ASSIGNMENT_ENABLED = false;
-  if (!ASSIGNMENT_ENABLED) {
-    document.getElementById("assignControls").style.display = "none";
-  }
+  const ASSIGNMENT_ENABLED = true;
+  // Batch-assign (multiple alerts -> one person) is out of scope for the
+  // multi-assignee trial — only the per-alert modal picker is gated by the
+  // flag below. This stays hidden unconditionally until batch-assign is
+  // redesigned for the array-based assigned_to contract.
+  document.getElementById("assignControls").style.display = "none";
 
   let statusFilter = "Active";
   let typeFilter = "All";
@@ -545,9 +551,26 @@
     return { cls: "pending", label: "Pending" };
   }
 
+  // Mirror of CRITICAL_THRESHOLD_SQL in function_app.py — keep in sync
+  function criticalThresholdDays(alert) {
+    const period = String(alert.billing_period || "").trim().toLowerCase();
+    if (period === "monthly") return 45;
+    if (period === "quarterly") return 75;
+    return 65;
+  }
+
+  function assigneeBadge(alert) {
+    if (!ASSIGNMENT_ENABLED) return "";
+    const list = alert.assigned_to || [];
+    if (!list.length) return "";
+    const labels = list.map(email => escapeHtml(email.split("@")[0])).join(", ");
+    const title = escapeHtml(list.join(", "));
+    return `<span class="assignee-badge" title="${title}">${labels}</span>`;
+  }
+
   function renderCard(alert) {
     const status = statusInfo(alert);
-    const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= 65);
+    const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= criticalThresholdDays(alert));
     const isSnoozed = !!alert.snoozed_today;
 
     return `
@@ -558,7 +581,7 @@
             <span class="client-code">${escapeHtml(alert.client_code)}</span>
           </span>
           <span class="pill-group">
-            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>
+            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>${assigneeBadge(alert)}
           </span>
         </div>
         <h3>${escapeHtml(alert.client_name)}</h3>
@@ -578,7 +601,7 @@
 
   function renderRow(alert) {
     const status = statusInfo(alert);
-    const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= 65);
+    const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= criticalThresholdDays(alert));
     const isSnoozed = !!alert.snoozed_today;
 
     return `
@@ -593,6 +616,7 @@
             ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>
           </span>
         </td>
+        <td>${assigneeBadge(alert) || "—"}</td>
         <td class="mono">${escapeHtml(alert.last_bill_date) || "—"}</td>
         <td class="mono">${escapeHtml(alert.billing_period) || "—"}</td>
         <td class="mono">${alert.days_alerted != null ? alert.days_alerted + "d" : "—"}</td>
@@ -696,12 +720,16 @@
     }
   });
 
+  document.addEventListener("click", (e) => {
+    const assigneeCombo = document.getElementById("assigneeCombo");
+    if (assigneeCombo && !assigneeCombo.contains(e.target)) {
+      document.getElementById("assigneePanel").classList.remove("show");
+    }
+  });
+
   async function loadTeamMembers() {
     try {
       teamMembers = await callApi("/team-members");
-      const batchSelect = document.getElementById("batchAssignInput");
-      batchSelect.innerHTML = `<option value="">Select assignee…</option>` +
-        teamMembers.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
     } catch (e) {
       console.error("team-members failed", e);
     }
@@ -714,7 +742,7 @@
   function listMessageHtml(cls, message) {
     return viewMode === "gallery"
       ? `<div class="${cls}">${message}</div>`
-      : `<tr><td colspan="10" class="${cls}">${message}</td></tr>`;
+      : `<tr><td colspan="11" class="${cls}">${message}</td></tr>`;
   }
 
   async function loadAlerts() {
@@ -832,7 +860,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     if (!unsnoozing) {
       const criticalIds = new Set(
         currentAlerts
-          .filter(a => !a.entered && a.days_since_last_bill != null && a.days_since_last_bill >= 65)
+          .filter(a => !a.entered && a.days_since_last_bill != null && a.days_since_last_bill >= criticalThresholdDays(a))
           .map(a => String(a.id))
       );
       const filtered = targetIds.filter(id => !criticalIds.has(String(id)));
@@ -873,17 +901,35 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     }
   });
 
-  function buildAssigneeOptions(selectedValue) {
-    let opts = `<option value="">— Unassigned —</option>`;
-    opts += teamMembers.map(m =>
-      `<option value="${escapeHtml(m)}" ${m === selectedValue ? "selected" : ""}>${escapeHtml(m)}</option>`
-    ).join("");
-    return opts;
+  let selectedAssignees = new Set();
+
+  function renderAssigneeChips() {
+    const chipsEl = document.getElementById("assigneeChips");
+    if (!chipsEl) return;
+    chipsEl.innerHTML = Array.from(selectedAssignees).map(m => `
+      <span class="chip">${escapeHtml(m)}<button data-member="${escapeHtml(m)}" class="chipRemove">&times;</button></span>
+    `).join("");
+  }
+
+  function renderAssigneePanel(searchText) {
+    const panel = document.getElementById("assigneePanel");
+    if (!panel) return;
+    const filtered = teamMembers.filter(m => m.toLowerCase().includes(searchText.toLowerCase()));
+    if (filtered.length === 0) {
+      panel.innerHTML = `<div class="combo-empty">No matching team members</div>`;
+      return;
+    }
+    panel.innerHTML = filtered.map(m => `
+      <label class="combo-option">
+        <input type="checkbox" class="assigneeOption" data-member="${escapeHtml(m)}" ${selectedAssignees.has(m) ? "checked" : ""}>
+        ${escapeHtml(m)}
+      </label>
+    `).join("");
   }
 
   function renderModal(alert) {
     const status = statusInfo(alert);
-    const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= 65);
+    const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= criticalThresholdDays(alert));
     const instructions = alert.account_instructions ? escapeHtml(alert.account_instructions) : "";
 
     return `
@@ -923,7 +969,11 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
       ${ASSIGNMENT_ENABLED ? `
       <div class="modal-field">
         <label>Assigned to</label>
-        <select id="modalAssignedInput">${buildAssigneeOptions(alert.assigned_to || "")}</select>
+        <div class="combo" id="assigneeCombo">
+          <div class="combo-chips" id="assigneeChips"></div>
+          <input type="text" id="assigneeSearchInput" placeholder="Search team members…" autocomplete="off">
+          <div class="combo-panel" id="assigneePanel"></div>
+        </div>
       </div>` : ""}
 
       <div class="modal-actions">
@@ -942,6 +992,37 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
 
     document.getElementById("modalCloseBtn").addEventListener("click", closeModal);
 
+    if (ASSIGNMENT_ENABLED) {
+      selectedAssignees = new Set(alert.assigned_to || []);
+      renderAssigneeChips();
+      renderAssigneePanel("");
+
+      const assigneeSearchInput = document.getElementById("assigneeSearchInput");
+      const assigneePanel = document.getElementById("assigneePanel");
+
+      assigneeSearchInput.addEventListener("focus", () => {
+        renderAssigneePanel(assigneeSearchInput.value);
+        assigneePanel.classList.add("show");
+      });
+      assigneeSearchInput.addEventListener("input", () => {
+        renderAssigneePanel(assigneeSearchInput.value);
+        assigneePanel.classList.add("show");
+      });
+      assigneePanel.addEventListener("change", (e) => {
+        if (!e.target.classList.contains("assigneeOption")) return;
+        const m = e.target.dataset.member;
+        if (e.target.checked) selectedAssignees.add(m); else selectedAssignees.delete(m);
+        renderAssigneeChips();
+      });
+      document.getElementById("assigneeChips").addEventListener("click", (e) => {
+        const btn = e.target.closest(".chipRemove");
+        if (!btn) return;
+        selectedAssignees.delete(btn.dataset.member);
+        renderAssigneeChips();
+        renderAssigneePanel(assigneeSearchInput.value);
+      });
+    }
+
     document.getElementById("modalSaveBtn").addEventListener("click", async () => {
       const statusEl = document.getElementById("modalSaveStatus");
       const notes = document.getElementById("modalNotesInput").value;
@@ -949,8 +1030,8 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
       const billPulled = billPulledEl.disabled ? alert.bill_pulled : billPulledEl.checked;
       let assignedFields = {};
       if (ASSIGNMENT_ENABLED) {
-        const assignedTo = document.getElementById("modalAssignedInput").value.trim();
-        assignedFields = { assigned_to: assignedTo || null, assigned_at: assignedTo ? new Date().toISOString() : null };
+        const assignedTo = Array.from(selectedAssignees);
+        assignedFields = { assigned_to: assignedTo, assigned_at: assignedTo.length ? new Date().toISOString() : null };
       }
 
       statusEl.textContent = "Saving…";
