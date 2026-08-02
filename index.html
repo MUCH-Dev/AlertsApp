@@ -115,6 +115,7 @@
   .grid-table tbody td{ padding:9px 10px; font-size:12.5px; border-bottom:1px solid var(--border); }
   .grid-table tbody tr:last-child td{ border-bottom:none; }
   .grid-table tbody tr:hover{ background:#F7F8FA; }
+  .assignment-off .col-assigned{ display:none; }
   .row-card td:first-child{ border-left:4px solid var(--pending); }
   .row-card.status-pulled td:first-child{ border-left-color:var(--pulled); }
   .row-card.status-entered td:first-child{ border-left-color:var(--entered); }
@@ -412,7 +413,7 @@
             <th>Vendor</th>
             <th>Account #</th>
             <th>Status</th>
-            <th>Assigned</th>
+            <th class="col-assigned">Assigned</th>
             <th>Last bill</th>
             <th>Billing period</th>
             <th>Days on alert</th>
@@ -460,6 +461,7 @@
   // flag below. This stays hidden unconditionally until batch-assign is
   // redesigned for the array-based assigned_to contract.
   document.getElementById("assignControls").style.display = "none";
+  document.body.classList.toggle("assignment-off", !ASSIGNMENT_ENABLED);
 
   let statusFilter = "Active";
   let typeFilter = "All";
@@ -616,7 +618,7 @@
             ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>
           </span>
         </td>
-        <td>${assigneeBadge(alert) || "—"}</td>
+        <td class="col-assigned">${assigneeBadge(alert) || "—"}</td>
         <td class="mono">${escapeHtml(alert.last_bill_date) || "—"}</td>
         <td class="mono">${escapeHtml(alert.billing_period) || "—"}</td>
         <td class="mono">${alert.days_alerted != null ? alert.days_alerted + "d" : "—"}</td>

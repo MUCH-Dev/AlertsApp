@@ -119,9 +119,10 @@ def parse_assigned_to(raw):
     if not raw:
         return []
     try:
-        return json.loads(raw)
+        parsed = json.loads(raw)
     except (json.JSONDecodeError, TypeError):
         return [raw]  # legacy single-email string, pre-migration
+    return parsed if isinstance(parsed, list) else [parsed]
 
 
 @app.route(route="alerts", methods=["GET"])
@@ -316,7 +317,14 @@ def patch_alert(req: func.HttpRequest) -> func.HttpResponse:
 
     update_fields = {k: v for k, v in body.items() if k in ALLOWED_PATCH_FIELDS}
     if "assigned_to" in update_fields:
-        update_fields["assigned_to"] = json.dumps(update_fields["assigned_to"] or [])
+        value = update_fields["assigned_to"] or []
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+            return func.HttpResponse(
+                json.dumps({"error": "assigned_to must be an array of email strings"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        update_fields["assigned_to"] = json.dumps(value)
     if not update_fields:
         return func.HttpResponse(
             json.dumps({"error": f"No valid fields to update. Allowed: {sorted(ALLOWED_PATCH_FIELDS)}"}),
