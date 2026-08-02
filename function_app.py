@@ -196,6 +196,11 @@ def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
             query += " AND account_number LIKE ?"
             params.append("%" + account_search + "%")
 
+        if req.params.get("assignee") == "me":
+            query += " AND (LOWER(assigned_to) = LOWER(?) OR LOWER(assigned_to) = LOWER(?))"
+            params.append(json.dumps([email]))
+            params.append(email)
+
         query += " ORDER BY client_code ASC, last_bill_date ASC"
 
         cursor.execute(query, params)
@@ -273,6 +278,11 @@ def get_metrics(req: func.HttpRequest) -> func.HttpResponse:
         if account_search:
             query += " AND account_number LIKE ?"
             params.append("%" + account_search + "%")
+
+        if req.params.get("assignee") == "me":
+            query += " AND (LOWER(assigned_to) = LOWER(?) OR LOWER(assigned_to) = LOWER(?))"
+            params.append(json.dumps([email]))
+            params.append(email)
 
         cursor.execute(query, params)
         row = cursor.fetchone()

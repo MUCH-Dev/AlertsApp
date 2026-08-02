@@ -116,6 +116,7 @@
   .grid-table tbody tr:last-child td{ border-bottom:none; }
   .grid-table tbody tr:hover{ background:#F7F8FA; }
   .assignment-off .col-assigned{ display:none; }
+  .assignment-off .assignee-field{ display:none; }
   .row-card td:first-child{ border-left:4px solid var(--pending); }
   .row-card.status-pulled td:first-child{ border-left-color:var(--pulled); }
   .row-card.status-entered td:first-child{ border-left-color:var(--entered); }
@@ -387,6 +388,13 @@
           <button data-status="All">All</button>
         </div>
       </div>
+      <div class="field assignee-field">
+        <label>Assignee</label>
+        <div class="status-seg" id="assigneeSeg">
+          <button data-assignee="all" class="active">Everyone</button>
+          <button data-assignee="me">Me</button>
+        </div>
+      </div>
     </div>
 
     <div class="batchbar show" id="batchBar">
@@ -465,6 +473,7 @@
 
   let statusFilter = "Active";
   let typeFilter = "All";
+  let assigneeFilter = "all";
   let clientSearchDebounce = null;
   let accountSearchDebounce = null;
   let currentAlerts = [];
@@ -637,6 +646,7 @@
     const accountSearch = document.getElementById("accountSearch").value.trim();
     if (accountSearch) params.set("account_number_search", accountSearch);
     if (selectedVendors.size > 0) params.set("vendor", Array.from(selectedVendors).join(","));
+    if (assigneeFilter === "me") params.set("assignee", "me");
     return params;
   }
 
@@ -1099,6 +1109,15 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     document.getElementById("batchSnoozeBtn").textContent =
       statusFilter === "Snoozed" ? "Unsnooze selected" : "Snooze selected";
     loadAlerts();
+  });
+
+  document.getElementById("assigneeSeg").addEventListener("click", (e) => {
+    if (e.target.tagName !== "BUTTON") return;
+    assigneeFilter = e.target.dataset.assignee;
+    document.querySelectorAll("#assigneeSeg button").forEach(b => b.classList.remove("active"));
+    e.target.classList.add("active");
+    loadAlerts();
+    loadMetrics();
   });
 
   document.getElementById("viewToggle").addEventListener("click", (e) => {
