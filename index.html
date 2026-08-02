@@ -315,7 +315,7 @@
   .combo-empty{ padding:10px; font-size:12.5px; color:var(--muted); text-align:center; }
 </style>
 </head>
-<body>
+<body class="assignment-off">
 
   <div id="signinScreen">
     <div class="card">
@@ -372,9 +372,9 @@
       <div class="field">
         <label>Alert type</label>
         <div class="status-seg" id="typeSeg">
+          <button data-type="All" class="active">All</button>
           <button data-type="Billable">Billable</button>
           <button data-type="Supply">Supply</button>
-          <button data-type="All" class="active">All</button>
         </div>
       </div>
       <div class="field">
@@ -1058,7 +1058,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
           })
         });
         statusEl.textContent = "Saved";
-        await loadAlerts();
+        await Promise.all([loadAlerts(), loadMetrics()]);
       } catch (err) {
         statusEl.textContent = "Failed to save";
         console.error(err);
