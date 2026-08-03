@@ -1039,7 +1039,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
       assigneePanel.addEventListener("change", (e) => {
         if (!e.target.classList.contains("assigneeOption")) return;
         const m = e.target.dataset.member;
-        if (e.target.checked) selectedAssignees = new Set([m]); else selectedAssignees.delete(m);
+        if (e.target.checked) selectedAssignees.add(m); else selectedAssignees.delete(m);
         renderAssigneeChips();
         renderAssigneePanel(assigneeSearchInput.value);
       });
