@@ -845,10 +845,20 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
 
     const now = new Date().toISOString();
     const ids = Array.from(selectedIds);
+    const pairs = ids.map(id => ({ id, alert: currentAlerts.find(a => String(a.id) === String(id)) }));
+    const stale = pairs.filter(p => !p.alert);
+    const valid = pairs.filter(p => p.alert);
+
+    if (stale.length > 0) {
+      console.warn(
+        "Batch assign: skipped stale selection (alert no longer in loaded list)",
+        stale.map(p => p.id)
+      );
+    }
+
     const results = await Promise.allSettled(
-      ids.map(id => {
-        const alert = currentAlerts.find(a => String(a.id) === String(id));
-        const nextAssignedTo = Array.from(new Set([...(alert?.assigned_to || []), assignee]));
+      valid.map(({ id, alert }) => {
+        const nextAssignedTo = Array.from(new Set([...(alert.assigned_to || []), assignee]));
         return callApi(`/alerts/${id}`, {
           method: "PATCH",
           body: JSON.stringify({ assigned_to: nextAssignedTo, assigned_at: now })
@@ -856,7 +866,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
       })
     );
 
-    const failed = results.filter(r => r.status === "rejected").length;
+    const failed = results.filter(r => r.status === "rejected").length + stale.length;
     selectedIds.clear();
     document.getElementById("batchAssignInput").value = "";
     updateBatchBar();
