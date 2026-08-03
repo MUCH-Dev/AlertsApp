@@ -445,26 +445,40 @@ git log --oneline -5
 
 Expected: the four commits from Tasks 1-4 at the top, in order.
 
-- [ ] **Step 2: Push to the branch staging deploys from — ask the user for explicit confirmation first**
+- [ ] **Step 2: Publish the Function App backend first — ask the user for explicit confirmation before deploying anything**
 
-This pushes to a shared remote and triggers the GitHub Actions deploy workflow (`.github/workflows/azure-static-web-apps-gray-stone-074e90d0f.yml`). Do not run this without the user explicitly confirming it's OK to deploy right now.
+The static frontend (`index.html`) and the Python backend (`function_app.py`) deploy through two independent pipelines: the GitHub Actions workflow (`.github/workflows/azure-static-web-apps-gray-stone-074e90d0f.yml`) only uploads static content (`api_location: ""`), it does NOT publish the Function App. The backend at `https://alerts-functions-staging.azurewebsites.net` is published separately (e.g. `func azure functionapp publish <staging-function-app-name>` from this directory, or via the VS Code Azure Functions extension).
+
+Publish the backend **before** pushing the frontend. This order is safe either way (Task 1's validation change only becomes stricter-to-looser, never the other way — old and new frontends both work against the new backend), but publishing backend-first means there's never a window where the new frontend sends multi-length arrays to an old backend that still 400s on them.
+
+Do not run either deploy without the user explicitly confirming it's OK to deploy right now.
+
+- [ ] **Step 3: Sanity-check the backend deploy directly**
+
+Before touching the UI, confirm the deployed backend actually accepts multi-length `assigned_to` arrays — a PATCH against any real staging alert id with a 2-element array should return 200, not 400. If it 400s, the Function App publish didn't take; stop and re-publish before proceeding to the frontend push.
+
+- [ ] **Step 4: Push the frontend to the branch staging deploys from — ask the user for explicit confirmation first**
+
+This pushes to a shared remote and triggers the GitHub Actions deploy workflow.
 
 ```bash
 git push origin staging
 ```
 
-- [ ] **Step 3: Wait for the deploy workflow to finish**
+- [ ] **Step 5: Wait for the deploy workflow to finish**
 
 Check the Actions run for the pushed commit (via `gh run list --branch staging` or the GitHub UI) and confirm it succeeded before testing.
 
-- [ ] **Step 4: Manually verify in the browser**
+- [ ] **Step 6: Manually verify in the browser**
 
 1. Log into the deployed staging app. Multi-select several alerts via checkboxes — include some with zero existing assignees and some with one existing assignee.
 2. Pick a teammate from the batch dropdown (now visible in the batch bar) and click "Assign selected."
 3. Confirm: alerts that had no assignee now show exactly the chosen person; alerts that already had someone now show both people; the success/fail count shown matches what actually happened.
 4. Open the modal for one of the two-assignee alerts and check a different teammate's checkbox. Confirm all three people remain checked/listed (not collapsed to one).
 5. Re-run the bulk action with the same person on an already-assigned alert. Confirm no duplicate entry appears.
+6. Switch the Assignee filter to "Me" on an alert that now has you as one of 2+ assignees. Confirm it still shows up (this exercises the `assignee=me` read-path fix that shipped alongside this task's other fixes — if it's missing from the deployed alerts view, stop and report it rather than assuming it's a UI refresh issue).
+7. Select some alerts, then change a status/type filter or type in the search box *without* deselecting, then click "Assign selected." Confirm the popup reports the stale ones as failed/skipped rather than the assignment silently overwriting anything (this is the regression commit `1aa230a` fixed).
 
-- [ ] **Step 5: Report results**
+- [ ] **Step 7: Report results**
 
 If any step in Step 4 doesn't match the expected outcome, stop and report exactly what happened instead — do not attempt further fixes without checking back in, since this is the point where real user-facing bugs would surface for the first time.
