@@ -282,7 +282,7 @@
   }
   .batchbar button:hover{ background:#3a6ef0; }
   .batchbar button:disabled{ opacity:.5; cursor:not-allowed; }
-  .batchbar .snooze-btn{ background:var(--snoozed); color:#fff; border:none; margin-left:auto; }
+  .batchbar .snooze-btn{ background:var(--snoozed); color:#fff; border:none; }
   .batchbar .snooze-btn:hover{ background:#6d4fa8; }
 
   .card-check{ display:none; margin-right:6px; }
@@ -746,6 +746,12 @@
   function populateBatchAssignSelect() {
     const select = document.getElementById("batchAssignInput");
     if (!select) return;
+    if (teamMembers.length === 0) {
+      select.innerHTML = '<option value="" disabled selected>No team members available</option>';
+      select.disabled = true;
+      return;
+    }
+    select.disabled = false;
     select.innerHTML = '<option value="" disabled selected>Select a teammate…</option>' +
       teamMembers.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
   }
@@ -837,7 +843,11 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
 });
   document.getElementById("batchAssignBtn").addEventListener("click", async () => {
     const assignee = document.getElementById("batchAssignInput").value.trim();
-    if (!assignee || selectedIds.size === 0) return;
+    if (selectedIds.size === 0) return;
+    if (!assignee) {
+      showPopup("Pick a teammate first.");
+      return;
+    }
 
     const btn = document.getElementById("batchAssignBtn");
     btn.disabled = true;
@@ -871,11 +881,17 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     document.getElementById("batchAssignInput").value = "";
     updateBatchBar();
     btn.textContent = "Assign selected";
-    await loadAlerts();
+    await Promise.all([loadAlerts(), loadMetrics()]);
 
     if (failed > 0) {
-      console.error("Batch assign: failures", results.filter(r => r.status === "rejected"));
-      showPopup(`Assigned ${ids.length - failed} of ${ids.length} — ${failed} failed. Check console for details.`);
+      const rejected = results.filter(r => r.status === "rejected");
+      if (rejected.length > 0) {
+        console.error("Batch assign: failures", rejected);
+      }
+      const parts = [];
+      if (rejected.length > 0) parts.push(`${rejected.length} failed`);
+      if (stale.length > 0) parts.push(`${stale.length} skipped (stale selection)`);
+      showPopup(`Assigned ${ids.length - failed} of ${ids.length} — ${parts.join(", ")}. Check console for details.`);
     }
   });
 
