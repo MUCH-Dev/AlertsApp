@@ -117,6 +117,7 @@
   .grid-table tbody tr:hover{ background:#F7F8FA; }
   .assignment-off .col-assigned{ display:none; }
   .assignment-off .assignee-field{ display:none; }
+  .assignment-off .assignField{ display:none; }
   .row-card td:first-child{ border-left:4px solid var(--pending); }
   .row-card.status-pulled td:first-child{ border-left-color:var(--pulled); }
   .row-card.status-entered td:first-child{ border-left-color:var(--entered); }
@@ -464,11 +465,6 @@
   const msalInstance = new msal.PublicClientApplication(msalConfig);
 
   const ASSIGNMENT_ENABLED = true;
-  // Batch-assign (multiple alerts -> one person) is out of scope for the
-  // multi-assignee trial — only the per-alert modal picker is gated by the
-  // flag below. This stays hidden unconditionally until batch-assign is
-  // redesigned for the array-based assigned_to contract.
-  document.getElementById("assignControls").style.display = "none";
   document.body.classList.toggle("assignment-off", !ASSIGNMENT_ENABLED);
 
   let statusFilter = "Active";
@@ -745,6 +741,13 @@
     } catch (e) {
       console.error("team-members failed", e);
     }
+  }
+
+  function populateBatchAssignSelect() {
+    const select = document.getElementById("batchAssignInput");
+    if (!select) return;
+    select.innerHTML = '<option value="" disabled selected>Select a teammate…</option>' +
+      teamMembers.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
   }
 
   function activeListContainer() {
@@ -1162,6 +1165,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     document.getElementById("whoLabel").textContent = account.username;
 
     await Promise.all([loadMetrics(), loadVendors(), ...(ASSIGNMENT_ENABLED ? [loadTeamMembers()] : [])]);
+    if (ASSIGNMENT_ENABLED) populateBatchAssignSelect();
     await loadAlerts();
   }
 
