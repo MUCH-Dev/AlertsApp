@@ -328,9 +328,9 @@ def patch_alert(req: func.HttpRequest) -> func.HttpResponse:
     update_fields = {k: v for k, v in body.items() if k in ALLOWED_PATCH_FIELDS}
     if "assigned_to" in update_fields:
         value = update_fields["assigned_to"] or []
-        if not isinstance(value, list) or not all(isinstance(v, str) for v in value) or len(value) > 1:
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
             return func.HttpResponse(
-                json.dumps({"error": "assigned_to must be an array of at most one email string"}),
+                json.dumps({"error": "assigned_to must be an array of email strings"}),
                 status_code=400,
                 mimetype="application/json"
             )
