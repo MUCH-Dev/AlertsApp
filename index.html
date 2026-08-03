@@ -789,6 +789,38 @@
     }
   }
 
+  async function loadAlertsSilent() {
+    const params = buildFilterParams();
+    if (statusFilter !== "All") params.set("status", statusFilter);
+
+    try {
+      const alerts = await callApi("/alerts?" + params.toString());
+      currentAlerts = alerts;
+      applyViewMode();
+      document.getElementById("viewTotal").textContent = "Total: " + alerts.length;
+    } catch (e) {
+      console.error("Background refresh failed", e);
+    }
+  }
+
+  function isBackgroundRefreshSafe() {
+    return !document.hidden
+      && !document.getElementById("modalOverlay").classList.contains("show")
+      && selectedIds.size === 0;
+  }
+
+  async function pollTick() {
+    if (!isBackgroundRefreshSafe()) return;
+    await Promise.all([loadAlertsSilent(), loadMetrics()]);
+  }
+
+  function startAutoRefresh() {
+    setInterval(pollTick, 15000);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) pollTick();
+    });
+  }
+
   async function handleAlertContainerClick(e) {
     if (e.target.classList.contains("card-check")) {
       const id = e.target.dataset.id;
@@ -1196,6 +1228,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     await Promise.all([loadMetrics(), loadVendors(), ...(ASSIGNMENT_ENABLED ? [loadTeamMembers()] : [])]);
     if (ASSIGNMENT_ENABLED) populateBatchAssignSelect();
     await loadAlerts();
+    startAutoRefresh();
   }
 
   init();
