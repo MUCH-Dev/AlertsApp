@@ -197,8 +197,13 @@ def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
             params.append("%" + account_search + "%")
 
         if req.params.get("assignee") == "me":
-            query += " AND (LOWER(assigned_to) = LOWER(?) OR LOWER(assigned_to) = LOWER(?))"
-            params.append(json.dumps([email]))
+            query += """ AND (
+                LOWER(assigned_to) = LOWER(?)
+                OR (ISJSON(assigned_to) = 1 AND EXISTS (
+                    SELECT 1 FROM OPENJSON(assigned_to) WHERE LOWER(value) = LOWER(?)
+                ))
+            )"""
+            params.append(email)
             params.append(email)
 
         query += " ORDER BY client_code ASC, last_bill_date ASC"
@@ -280,8 +285,13 @@ def get_metrics(req: func.HttpRequest) -> func.HttpResponse:
             params.append("%" + account_search + "%")
 
         if req.params.get("assignee") == "me":
-            query += " AND (LOWER(assigned_to) = LOWER(?) OR LOWER(assigned_to) = LOWER(?))"
-            params.append(json.dumps([email]))
+            query += """ AND (
+                LOWER(assigned_to) = LOWER(?)
+                OR (ISJSON(assigned_to) = 1 AND EXISTS (
+                    SELECT 1 FROM OPENJSON(assigned_to) WHERE LOWER(value) = LOWER(?)
+                ))
+            )"""
+            params.append(email)
             params.append(email)
 
         cursor.execute(query, params)
