@@ -844,25 +844,28 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     btn.textContent = "Assigning…";
 
     const now = new Date().toISOString();
-    try {
-      await Promise.all(
-        Array.from(selectedIds).map(id =>
-          callApi(`/alerts/${id}`, {
-            method: "PATCH",
-            body: JSON.stringify({ assigned_to: assignee, assigned_at: now })
-          })
-        )
-      );
-      selectedIds.clear();
-      document.getElementById("batchAssignInput").value = "";
-      updateBatchBar();
-      btn.textContent = "Assign selected";
-      await loadAlerts();
-    } catch (err) {
-      btn.textContent = "Assign selected";
-      btn.disabled = false;
-      console.error("Batch assign failed", err);
-      showPopup("Some assignments may have failed. Check console for details.");
+    const ids = Array.from(selectedIds);
+    const results = await Promise.allSettled(
+      ids.map(id => {
+        const alert = currentAlerts.find(a => String(a.id) === String(id));
+        const nextAssignedTo = Array.from(new Set([...(alert?.assigned_to || []), assignee]));
+        return callApi(`/alerts/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ assigned_to: nextAssignedTo, assigned_at: now })
+        });
+      })
+    );
+
+    const failed = results.filter(r => r.status === "rejected").length;
+    selectedIds.clear();
+    document.getElementById("batchAssignInput").value = "";
+    updateBatchBar();
+    btn.textContent = "Assign selected";
+    await loadAlerts();
+
+    if (failed > 0) {
+      console.error("Batch assign: failures", results.filter(r => r.status === "rejected"));
+      showPopup(`Assigned ${ids.length - failed} of ${ids.length} — ${failed} failed. Check console for details.`);
     }
   });
 
