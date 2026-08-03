@@ -115,6 +115,8 @@
   .grid-table tbody td{ padding:9px 10px; font-size:12.5px; border-bottom:1px solid var(--border); }
   .grid-table tbody tr:last-child td{ border-bottom:none; }
   .grid-table tbody tr:hover{ background:#F7F8FA; }
+  .assignment-off .col-assigned{ display:none; }
+  .assignment-off .assignee-field{ display:none; }
   .row-card td:first-child{ border-left:4px solid var(--pending); }
   .row-card.status-pulled td:first-child{ border-left-color:var(--pulled); }
   .row-card.status-entered td:first-child{ border-left-color:var(--entered); }
@@ -136,6 +138,10 @@
   .client-code{
     font-size:11.5px; background:#EEF1F5; color:var(--muted);
     padding:2px 7px; border-radius:5px; letter-spacing:.02em;
+  }
+  .assignee-badge{
+    font-size:11px; font-weight:600; background:#EEF1F5; color:var(--muted);
+    padding:2px 7px; border-radius:5px;
   }
   .status-pill{ font-size:11px; font-weight:700; border-radius:12px; padding:3px 10px; white-space:nowrap; }
   .pill-group{ display:flex; gap:6px; align-items:center; }
@@ -309,7 +315,7 @@
   .combo-empty{ padding:10px; font-size:12.5px; color:var(--muted); text-align:center; }
 </style>
 </head>
-<body>
+<body class="assignment-off">
 
   <div id="signinScreen">
     <div class="card">
@@ -366,9 +372,9 @@
       <div class="field">
         <label>Alert type</label>
         <div class="status-seg" id="typeSeg">
+          <button data-type="All" class="active">All</button>
           <button data-type="Billable">Billable</button>
           <button data-type="Supply">Supply</button>
-          <button data-type="All" class="active">All</button>
         </div>
       </div>
       <div class="field">
@@ -380,6 +386,13 @@
           <button data-status="Entered">Entered</button>
           <button data-status="Snoozed">Snoozed</button>
           <button data-status="All">All</button>
+        </div>
+      </div>
+      <div class="field assignee-field">
+        <label>Assignee</label>
+        <div class="status-seg" id="assigneeSeg">
+          <button data-assignee="all" class="active">Everyone</button>
+          <button data-assignee="me">Me</button>
         </div>
       </div>
     </div>
@@ -408,6 +421,7 @@
             <th>Vendor</th>
             <th>Account #</th>
             <th>Status</th>
+            <th class="col-assigned">Assigned</th>
             <th>Last bill</th>
             <th>Billing period</th>
             <th>Days on alert</th>
@@ -449,13 +463,17 @@
   };
   const msalInstance = new msal.PublicClientApplication(msalConfig);
 
-  const ASSIGNMENT_ENABLED = false;
-  if (!ASSIGNMENT_ENABLED) {
-    document.getElementById("assignControls").style.display = "none";
-  }
+  const ASSIGNMENT_ENABLED = true;
+  // Batch-assign (multiple alerts -> one person) is out of scope for the
+  // multi-assignee trial — only the per-alert modal picker is gated by the
+  // flag below. This stays hidden unconditionally until batch-assign is
+  // redesigned for the array-based assigned_to contract.
+  document.getElementById("assignControls").style.display = "none";
+  document.body.classList.toggle("assignment-off", !ASSIGNMENT_ENABLED);
 
   let statusFilter = "Active";
   let typeFilter = "All";
+  let assigneeFilter = "all";
   let clientSearchDebounce = null;
   let accountSearchDebounce = null;
   let currentAlerts = [];
@@ -552,6 +570,15 @@
     return 65;
   }
 
+  function assigneeBadge(alert) {
+    if (!ASSIGNMENT_ENABLED) return "";
+    const list = alert.assigned_to || [];
+    if (!list.length) return "";
+    const labels = list.map(email => escapeHtml(email.split("@")[0])).join(", ");
+    const title = escapeHtml(list.join(", "));
+    return `<span class="assignee-badge" title="${title}">${labels}</span>`;
+  }
+
   function renderCard(alert) {
     const status = statusInfo(alert);
     const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= criticalThresholdDays(alert));
@@ -565,7 +592,7 @@
             <span class="client-code">${escapeHtml(alert.client_code)}</span>
           </span>
           <span class="pill-group">
-            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>
+            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>${assigneeBadge(alert)}
           </span>
         </div>
         <h3>${escapeHtml(alert.client_name)}</h3>
@@ -600,6 +627,7 @@
             ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>
           </span>
         </td>
+        <td class="col-assigned">${assigneeBadge(alert) || "—"}</td>
         <td class="mono">${escapeHtml(alert.last_bill_date) || "—"}</td>
         <td class="mono">${escapeHtml(alert.billing_period) || "—"}</td>
         <td class="mono">${alert.days_alerted != null ? alert.days_alerted + "d" : "—"}</td>
@@ -618,6 +646,7 @@
     const accountSearch = document.getElementById("accountSearch").value.trim();
     if (accountSearch) params.set("account_number_search", accountSearch);
     if (selectedVendors.size > 0) params.set("vendor", Array.from(selectedVendors).join(","));
+    if (assigneeFilter === "me") params.set("assignee", "me");
     return params;
   }
 
@@ -703,12 +732,16 @@
     }
   });
 
+  document.addEventListener("click", (e) => {
+    const assigneeCombo = document.getElementById("assigneeCombo");
+    if (assigneeCombo && !assigneeCombo.contains(e.target)) {
+      document.getElementById("assigneePanel").classList.remove("show");
+    }
+  });
+
   async function loadTeamMembers() {
     try {
       teamMembers = await callApi("/team-members");
-      const batchSelect = document.getElementById("batchAssignInput");
-      batchSelect.innerHTML = `<option value="">Select assignee…</option>` +
-        teamMembers.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
     } catch (e) {
       console.error("team-members failed", e);
     }
@@ -721,7 +754,7 @@
   function listMessageHtml(cls, message) {
     return viewMode === "gallery"
       ? `<div class="${cls}">${message}</div>`
-      : `<tr><td colspan="10" class="${cls}">${message}</td></tr>`;
+      : `<tr><td colspan="11" class="${cls}">${message}</td></tr>`;
   }
 
   async function loadAlerts() {
@@ -880,12 +913,30 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     }
   });
 
-  function buildAssigneeOptions(selectedValue) {
-    let opts = `<option value="">— Unassigned —</option>`;
-    opts += teamMembers.map(m =>
-      `<option value="${escapeHtml(m)}" ${m === selectedValue ? "selected" : ""}>${escapeHtml(m)}</option>`
-    ).join("");
-    return opts;
+  let selectedAssignees = new Set();
+
+  function renderAssigneeChips() {
+    const chipsEl = document.getElementById("assigneeChips");
+    if (!chipsEl) return;
+    chipsEl.innerHTML = Array.from(selectedAssignees).map(m => `
+      <span class="chip">${escapeHtml(m)}<button data-member="${escapeHtml(m)}" class="chipRemove">&times;</button></span>
+    `).join("");
+  }
+
+  function renderAssigneePanel(searchText) {
+    const panel = document.getElementById("assigneePanel");
+    if (!panel) return;
+    const filtered = teamMembers.filter(m => m.toLowerCase().includes(searchText.toLowerCase()));
+    if (filtered.length === 0) {
+      panel.innerHTML = `<div class="combo-empty">No matching team members</div>`;
+      return;
+    }
+    panel.innerHTML = filtered.map(m => `
+      <label class="combo-option">
+        <input type="checkbox" class="assigneeOption" data-member="${escapeHtml(m)}" ${selectedAssignees.has(m) ? "checked" : ""}>
+        ${escapeHtml(m)}
+      </label>
+    `).join("");
   }
 
   function renderModal(alert) {
@@ -930,7 +981,11 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
       ${ASSIGNMENT_ENABLED ? `
       <div class="modal-field">
         <label>Assigned to</label>
-        <select id="modalAssignedInput">${buildAssigneeOptions(alert.assigned_to || "")}</select>
+        <div class="combo" id="assigneeCombo">
+          <div class="combo-chips" id="assigneeChips"></div>
+          <input type="text" id="assigneeSearchInput" placeholder="Search team members…" autocomplete="off">
+          <div class="combo-panel" id="assigneePanel"></div>
+        </div>
       </div>` : ""}
 
       <div class="modal-actions">
@@ -949,6 +1004,38 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
 
     document.getElementById("modalCloseBtn").addEventListener("click", closeModal);
 
+    if (ASSIGNMENT_ENABLED) {
+      selectedAssignees = new Set(alert.assigned_to || []);
+      renderAssigneeChips();
+      renderAssigneePanel("");
+
+      const assigneeSearchInput = document.getElementById("assigneeSearchInput");
+      const assigneePanel = document.getElementById("assigneePanel");
+
+      assigneeSearchInput.addEventListener("focus", () => {
+        renderAssigneePanel(assigneeSearchInput.value);
+        assigneePanel.classList.add("show");
+      });
+      assigneeSearchInput.addEventListener("input", () => {
+        renderAssigneePanel(assigneeSearchInput.value);
+        assigneePanel.classList.add("show");
+      });
+      assigneePanel.addEventListener("change", (e) => {
+        if (!e.target.classList.contains("assigneeOption")) return;
+        const m = e.target.dataset.member;
+        if (e.target.checked) selectedAssignees = new Set([m]); else selectedAssignees.delete(m);
+        renderAssigneeChips();
+        renderAssigneePanel(assigneeSearchInput.value);
+      });
+      document.getElementById("assigneeChips").addEventListener("click", (e) => {
+        const btn = e.target.closest(".chipRemove");
+        if (!btn) return;
+        selectedAssignees.delete(btn.dataset.member);
+        renderAssigneeChips();
+        renderAssigneePanel(assigneeSearchInput.value);
+      });
+    }
+
     document.getElementById("modalSaveBtn").addEventListener("click", async () => {
       const statusEl = document.getElementById("modalSaveStatus");
       const notes = document.getElementById("modalNotesInput").value;
@@ -956,8 +1043,8 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
       const billPulled = billPulledEl.disabled ? alert.bill_pulled : billPulledEl.checked;
       let assignedFields = {};
       if (ASSIGNMENT_ENABLED) {
-        const assignedTo = document.getElementById("modalAssignedInput").value.trim();
-        assignedFields = { assigned_to: assignedTo || null, assigned_at: assignedTo ? new Date().toISOString() : null };
+        const assignedTo = Array.from(selectedAssignees);
+        assignedFields = { assigned_to: assignedTo, assigned_at: assignedTo.length ? new Date().toISOString() : null };
       }
 
       statusEl.textContent = "Saving…";
@@ -971,7 +1058,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
           })
         });
         statusEl.textContent = "Saved";
-        await loadAlerts();
+        await Promise.all([loadAlerts(), loadMetrics()]);
       } catch (err) {
         statusEl.textContent = "Failed to save";
         console.error(err);
@@ -1022,6 +1109,15 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     document.getElementById("batchSnoozeBtn").textContent =
       statusFilter === "Snoozed" ? "Unsnooze selected" : "Snooze selected";
     loadAlerts();
+  });
+
+  document.getElementById("assigneeSeg").addEventListener("click", (e) => {
+    if (e.target.tagName !== "BUTTON") return;
+    assigneeFilter = e.target.dataset.assignee;
+    document.querySelectorAll("#assigneeSeg button").forEach(b => b.classList.remove("active"));
+    e.target.classList.add("active");
+    loadAlerts();
+    loadMetrics();
   });
 
   document.getElementById("viewToggle").addEventListener("click", (e) => {

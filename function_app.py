@@ -110,6 +110,21 @@ def json_safe(value):
     return value
 
 
+def parse_assigned_to(raw):
+    """Parse assigned_to field, handling both new JSON-array and legacy single-email formats.
+
+    Legacy data (pre-migration) may contain plain email strings like "jsmith@muc-corp.com"
+    instead of JSON arrays. This helper safely parses both formats.
+    """
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return [raw]  # legacy single-email string, pre-migration
+    return parsed if isinstance(parsed, list) else [parsed]
+
+
 @app.route(route="alerts", methods=["GET"])
 def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
     email = get_caller_email(req)
@@ -137,7 +152,7 @@ def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
                    account_name, tax_id, billing_period, payment_method,
                    account_instructions, latest_account_note, alert_notes, entered, bill_pulled, snoozed_today,
                    last_bill_date, last_bill_due_date, assigned_to, assigned_at, v5_account_id,
-                   days_since_last_bill, days_alerted
+                   days_since_last_bill, days_alerted, credential_status
             FROM Alerts
             WHERE load_date = CAST(GETDATE() AS DATE)
               AND client_code IN ({placeholders})
@@ -181,6 +196,11 @@ def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
             query += " AND account_number LIKE ?"
             params.append("%" + account_search + "%")
 
+        if req.params.get("assignee") == "me":
+            query += " AND (LOWER(assigned_to) = LOWER(?) OR LOWER(assigned_to) = LOWER(?))"
+            params.append(json.dumps([email]))
+            params.append(email)
+
         query += " ORDER BY client_code ASC, last_bill_date ASC"
 
         cursor.execute(query, params)
@@ -189,6 +209,8 @@ def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
             {col: json_safe(val) for col, val in zip(columns, row)}
             for row in cursor.fetchall()
         ]
+        for row in rows:
+            row["assigned_to"] = parse_assigned_to(row["assigned_to"])
         conn.close()
 
         return func.HttpResponse(json.dumps(rows), mimetype="application/json")
@@ -257,6 +279,11 @@ def get_metrics(req: func.HttpRequest) -> func.HttpResponse:
             query += " AND account_number LIKE ?"
             params.append("%" + account_search + "%")
 
+        if req.params.get("assignee") == "me":
+            query += " AND (LOWER(assigned_to) = LOWER(?) OR LOWER(assigned_to) = LOWER(?))"
+            params.append(json.dumps([email]))
+            params.append(email)
+
         cursor.execute(query, params)
         row = cursor.fetchone()
         conn.close()
@@ -299,6 +326,15 @@ def patch_alert(req: func.HttpRequest) -> func.HttpResponse:
         )
 
     update_fields = {k: v for k, v in body.items() if k in ALLOWED_PATCH_FIELDS}
+    if "assigned_to" in update_fields:
+        value = update_fields["assigned_to"] or []
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value) or len(value) > 1:
+            return func.HttpResponse(
+                json.dumps({"error": "assigned_to must be an array of at most one email string"}),
+                status_code=400,
+                mimetype="application/json"
+            )
+        update_fields["assigned_to"] = json.dumps(value)
     if not update_fields:
         return func.HttpResponse(
             json.dumps({"error": f"No valid fields to update. Allowed: {sorted(ALLOWED_PATCH_FIELDS)}"}),
