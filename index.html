@@ -112,6 +112,10 @@
     position:sticky; top:0; background:#F7F8FA; text-align:left; font-size:11px; color:var(--muted);
     text-transform:uppercase; letter-spacing:.04em; padding:9px 10px; border-bottom:1px solid var(--border);
   }
+  .grid-table thead th.sortable{ cursor:pointer; user-select:none; }
+  .grid-table thead th.sortable:hover{ color:var(--ink); }
+  .sort-indicator{ display:inline-block; width:10px; margin-left:2px; opacity:.35; }
+  .grid-table thead th.sort-active .sort-indicator{ opacity:1; color:var(--ink); }
   .grid-table tbody td{ padding:9px 10px; font-size:12.5px; border-bottom:1px solid var(--border); }
   .grid-table tbody tr:last-child td{ border-bottom:none; }
   .grid-table tbody tr:hover{ background:#F7F8FA; }
@@ -247,6 +251,12 @@
     background:none; border:1px solid var(--accent); color:var(--accent); padding:9px 16px;
     border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
   }
+  .modal-buttons button.pulled-btn{
+    background:none; border:1px solid var(--pulled); color:var(--pulled); padding:9px 16px;
+    border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
+  .modal-buttons button.pulled-btn:hover{ background:var(--pulled-bg); }
+  .modal-buttons button.pulled-btn.active{ background:var(--pulled); color:#fff; }
 
   /* ---- Popup (replaces window.alert) ---- */
   #popupOverlay{
@@ -416,15 +426,15 @@
         <thead>
           <tr>
             <th></th>
-            <th>Client code</th>
-            <th>Client name</th>
-            <th>Vendor</th>
-            <th>Account #</th>
-            <th>Status</th>
-            <th class="col-assigned">Assigned</th>
-            <th>Last bill</th>
-            <th>Billing period</th>
-            <th>Days on alert</th>
+            <th class="sortable" data-sort="client_code">Client code<span class="sort-indicator"></span></th>
+            <th class="sortable" data-sort="client_name">Client name<span class="sort-indicator"></span></th>
+            <th class="sortable" data-sort="vendor">Vendor<span class="sort-indicator"></span></th>
+            <th class="sortable" data-sort="account_number">Account #<span class="sort-indicator"></span></th>
+            <th class="sortable" data-sort="status">Status<span class="sort-indicator"></span></th>
+            <th class="sortable col-assigned" data-sort="assigned">Assigned<span class="sort-indicator"></span></th>
+            <th class="sortable" data-sort="last_bill_date">Last bill<span class="sort-indicator"></span></th>
+            <th class="sortable" data-sort="billing_period">Billing period<span class="sort-indicator"></span></th>
+            <th class="sortable" data-sort="days_alerted">Days on alert<span class="sort-indicator"></span></th>
             <th></th>
           </tr>
         </thead>
@@ -477,6 +487,8 @@
   let clientSearchDebounce = null;
   let accountSearchDebounce = null;
   let currentAlerts = [];
+  let sortColumn = null;
+  let sortDirection = "asc";
   let selectedIds = new Set();
   let teamMembers = [];
   let allVendors = [];
@@ -505,7 +517,8 @@
       document.getElementById("gallery").innerHTML = currentAlerts.map(renderCard).join("");
       document.getElementById("gridBody").innerHTML = "";
     } else {
-      document.getElementById("gridBody").innerHTML = currentAlerts.map(renderRow).join("");
+      const rows = sortColumn ? currentAlerts.slice().sort(sortComparator(sortColumn, sortDirection)) : currentAlerts;
+      document.getElementById("gridBody").innerHTML = rows.map(renderRow).join("");
       document.getElementById("gallery").innerHTML = "";
     }
   }
@@ -577,6 +590,55 @@
     const labels = list.map(email => escapeHtml(email.split("@")[0])).join(", ");
     const title = escapeHtml(list.join(", "));
     return `<span class="assignee-badge" title="${title}">${labels}</span>`;
+  }
+
+  function sameAssignees(a, b) {
+    if (a.length !== b.length) return false;
+    const bSet = new Set(b);
+    return a.every(x => bSet.has(x));
+  }
+
+  const SORT_KEYS = {
+    client_code: alert => alert.client_code,
+    client_name: alert => alert.client_name,
+    vendor: alert => alert.vendor,
+    account_number: alert => alert.account_number,
+    status: alert => {
+      const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= criticalThresholdDays(alert));
+      const isSnoozed = !!alert.snoozed_today;
+      return (isCritical ? "Critical " : "") + (isSnoozed ? "Snoozed " : "") + statusInfo(alert).label;
+    },
+    assigned: alert => (alert.assigned_to || []).map(email => email.split("@")[0]).join(", "),
+    last_bill_date: alert => alert.last_bill_date,
+    billing_period: alert => alert.billing_period,
+    days_alerted: alert => alert.days_alerted
+  };
+
+  const NUMERIC_SORT_KEYS = new Set(["days_alerted"]);
+
+  function sortComparator(key, direction) {
+    const getValue = SORT_KEYS[key];
+    const numeric = NUMERIC_SORT_KEYS.has(key);
+    const dir = direction === "desc" ? -1 : 1;
+    return (a, b) => {
+      const va = getValue(a);
+      const vb = getValue(b);
+      const aEmpty = va === null || va === undefined || va === "";
+      const bEmpty = vb === null || vb === undefined || vb === "";
+      if (aEmpty && bEmpty) return 0;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+      if (numeric) return (va - vb) * dir;
+      return String(va).localeCompare(String(vb), undefined, { sensitivity: "base" }) * dir;
+    };
+  }
+
+  function updateSortIndicators() {
+    document.querySelectorAll(".grid-table thead th[data-sort]").forEach(th => {
+      const isActive = th.dataset.sort === sortColumn;
+      th.classList.toggle("sort-active", isActive);
+      th.querySelector(".sort-indicator").textContent = isActive ? (sortDirection === "asc" ? "▲" : "▼") : "";
+    });
   }
 
   function renderCard(alert) {
@@ -780,6 +842,38 @@
     }
   }
 
+  async function loadAlertsSilent() {
+    const params = buildFilterParams();
+    if (statusFilter !== "All") params.set("status", statusFilter);
+
+    try {
+      const alerts = await callApi("/alerts?" + params.toString());
+      currentAlerts = alerts;
+      applyViewMode();
+      document.getElementById("viewTotal").textContent = "Total: " + alerts.length;
+    } catch (e) {
+      console.error("Background refresh failed", e);
+    }
+  }
+
+  function isBackgroundRefreshSafe() {
+    return !document.hidden
+      && !document.getElementById("modalOverlay").classList.contains("show")
+      && selectedIds.size === 0;
+  }
+
+  async function pollTick() {
+    if (!isBackgroundRefreshSafe()) return;
+    await Promise.all([loadAlertsSilent(), loadMetrics()]);
+  }
+
+  function startAutoRefresh() {
+    setInterval(pollTick, 15000);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) pollTick();
+    });
+  }
+
   async function handleAlertContainerClick(e) {
     if (e.target.classList.contains("card-check")) {
       const id = e.target.dataset.id;
@@ -817,6 +911,20 @@
 
   document.getElementById("gallery").addEventListener("click", handleAlertContainerClick);
   document.getElementById("gridBody").addEventListener("click", handleAlertContainerClick);
+
+  document.querySelector(".grid-table thead").addEventListener("click", (e) => {
+    const th = e.target.closest("th[data-sort]");
+    if (!th) return;
+    const key = th.dataset.sort;
+    if (sortColumn === key) {
+      sortDirection = sortDirection === "asc" ? "desc" : "asc";
+    } else {
+      sortColumn = key;
+      sortDirection = "asc";
+    }
+    updateSortIndicators();
+    applyViewMode();
+  });
 
   function updateBatchBar() {
     document.getElementById("batchCount").textContent = selectedIds.size + " selected";
@@ -969,11 +1077,6 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
       ${(() => { const latest = displayNote(alert.latest_account_note, null); return latest ? `<div class="modal-field"><label>Latest V5 note</label><div class="modal-readonly">${escapeHtml(latest)}</div></div>` : ""; })()}
 
       <div class="modal-field">
-        <label><input type="checkbox" id="modalBillPulledInput" ${alert.bill_pulled ? "checked" : ""} ${alert.entered ? "disabled" : ""}> Bill pulled</label>
-        ${alert.entered ? `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;">Already entered — bill pulled status no longer applies.</div>` : ""}
-      </div>
-
-      <div class="modal-field">
         <label>Add V5 note</label>
         <textarea id="modalNotesInput">${escapeHtml(alert.alert_notes || "")}</textarea>
       </div>
@@ -992,6 +1095,8 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
         <span class="modal-save-status" id="modalSaveStatus"></span>
         <div class="modal-buttons">
           <button class="keystone" onclick="window.open('${keystoneUrl(alert)}', '_blank')">Open in Keystone</button>
+          ${!alert.entered && (!isCritical || alert.snoozed_today) ? `<button class="snooze-btn ${alert.snoozed_today ? "active" : ""}" id="modalSnoozeBtn" data-snoozed="${!!alert.snoozed_today}">${alert.snoozed_today ? "Unsnooze" : "Snooze"}</button>` : ""}
+          ${!alert.entered ? `<button class="pulled-btn ${alert.bill_pulled ? "active" : ""}" id="modalBillPulledBtn" data-bill-pulled="${!!alert.bill_pulled}">${alert.bill_pulled ? "Mark not bill pulled" : "Mark bill pulled"}</button>` : ""}
           <button class="save" id="modalSaveBtn">Save changes</button>
         </div>
       </div>
@@ -1039,8 +1144,6 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     document.getElementById("modalSaveBtn").addEventListener("click", async () => {
       const statusEl = document.getElementById("modalSaveStatus");
       const notes = document.getElementById("modalNotesInput").value;
-      const billPulledEl = document.getElementById("modalBillPulledInput");
-      const billPulled = billPulledEl.disabled ? alert.bill_pulled : billPulledEl.checked;
       let assignedFields = {};
       if (ASSIGNMENT_ENABLED) {
         const assignedTo = Array.from(selectedAssignees);
@@ -1053,7 +1156,6 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
           method: "PATCH",
           body: JSON.stringify({
             alert_notes: notes,
-            bill_pulled: billPulled,
             ...assignedFields
           })
         });
@@ -1062,6 +1164,70 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
       } catch (err) {
         statusEl.textContent = "Failed to save";
         console.error(err);
+      }
+    });
+
+    const modalSnoozeBtn = document.getElementById("modalSnoozeBtn");
+    if (modalSnoozeBtn) modalSnoozeBtn.addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      const nextSnoozed = btn.dataset.snoozed !== "true";
+      const notes = document.getElementById("modalNotesInput").value;
+      let assignedFields = {};
+      if (ASSIGNMENT_ENABLED) {
+        const assignedTo = Array.from(selectedAssignees);
+        if (!sameAssignees(assignedTo, alert.assigned_to || [])) {
+          assignedFields = { assigned_to: assignedTo, assigned_at: assignedTo.length ? new Date().toISOString() : null };
+        }
+      }
+      const notesChanged = notes !== (alert.alert_notes || "");
+      btn.disabled = true;
+      document.getElementById("modalSaveStatus").textContent = "Saving…";
+      try {
+        await callApi(`/alerts/${alert.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ ...(notesChanged ? { alert_notes: notes } : {}), snoozed_today: nextSnoozed, ...assignedFields })
+        });
+        await Promise.all([loadAlerts(), loadMetrics()]);
+        closeModal();
+      } catch (err) {
+        btn.disabled = false;
+        document.getElementById("modalSaveStatus").textContent = "";
+        console.error("Snooze toggle failed", err);
+        if (err.message.includes("Cannot snooze a Critical alert")) {
+          showPopup("Critical alerts cannot be snoozed.");
+        } else {
+          showPopup("Couldn't update snooze state. Check console for details.");
+        }
+      }
+    });
+
+    const modalBillPulledBtn = document.getElementById("modalBillPulledBtn");
+    if (modalBillPulledBtn) modalBillPulledBtn.addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      const nextBillPulled = btn.dataset.billPulled !== "true";
+      const notes = document.getElementById("modalNotesInput").value;
+      let assignedFields = {};
+      if (ASSIGNMENT_ENABLED) {
+        const assignedTo = Array.from(selectedAssignees);
+        if (!sameAssignees(assignedTo, alert.assigned_to || [])) {
+          assignedFields = { assigned_to: assignedTo, assigned_at: assignedTo.length ? new Date().toISOString() : null };
+        }
+      }
+      const notesChanged = notes !== (alert.alert_notes || "");
+      btn.disabled = true;
+      document.getElementById("modalSaveStatus").textContent = "Saving…";
+      try {
+        await callApi(`/alerts/${alert.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ ...(notesChanged ? { alert_notes: notes } : {}), bill_pulled: nextBillPulled, ...assignedFields })
+        });
+        await Promise.all([loadAlerts(), loadMetrics()]);
+        closeModal();
+      } catch (err) {
+        btn.disabled = false;
+        document.getElementById("modalSaveStatus").textContent = "";
+        console.error("Bill pulled update failed", err);
+        showPopup("Couldn't update bill pulled state. Check console for details.");
       }
     });
   }
@@ -1163,6 +1329,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
 
     await Promise.all([loadMetrics(), loadVendors(), ...(ASSIGNMENT_ENABLED ? [loadTeamMembers()] : [])]);
     await loadAlerts();
+    startAutoRefresh();
   }
 
   init();
