@@ -76,6 +76,7 @@
   .metric.pending .num{ color:var(--pending); }
   .metric.critical .num{ color:var(--critical); }
   .metric.entered .num{ color:var(--entered); }
+  .metric.total{ cursor:help; }
 
   /* ---- Filter bar ---- */
   .filterbar{
@@ -360,7 +361,7 @@
       <div class="metric pending"><div class="num" id="metricPending">–</div><div class="label">Pending</div></div>
       <div class="metric critical"><div class="num" id="metricCritical">–</div><div class="label">Critical</div></div>
       <div class="metric entered"><div class="num" id="metricEntered">–</div><div class="label">Entered</div></div>
-      <div class="metric"><div class="num" id="metricTotal">–</div><div class="label">Total today</div></div>
+      <div class="metric total" title="Every alert loaded today — not just Pending + Entered. Snoozed alerts and Bill-Pulled-but-not-yet-Entered alerts count here too, even though they're excluded from Pending."><div class="num" id="metricTotal">–</div><div class="label">Total today</div></div>
     </div>
 
     <div class="filterbar">
