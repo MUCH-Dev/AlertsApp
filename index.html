@@ -1120,7 +1120,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
         <span class="modal-save-status" id="modalSaveStatus"></span>
         <div class="modal-buttons">
           <button class="keystone" onclick="window.open('${keystoneUrl(alert)}', '_blank')">Open in Keystone</button>
-          ${!alert.entered && (!isCritical || alert.snoozed_today) ? `<button class="snooze-btn ${alert.snoozed_today ? "active" : ""}" id="modalSnoozeBtn" data-snoozed="${alert.snoozed_today}">${alert.snoozed_today ? "Unsnooze" : "Snooze"}</button>` : ""}
+          ${!alert.entered && (!isCritical || alert.snoozed_today) ? `<button class="snooze-btn ${alert.snoozed_today ? "active" : ""}" id="modalSnoozeBtn" data-snoozed="${!!alert.snoozed_today}">${alert.snoozed_today ? "Unsnooze" : "Snooze"}</button>` : ""}
           ${!alert.entered && !alert.bill_pulled ? `<button class="pulled-btn" id="modalBillPulledBtn">Mark bill pulled</button>` : ""}
           <button class="save" id="modalSaveBtn">Save changes</button>
         </div>
@@ -1202,12 +1202,13 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
         const assignedTo = Array.from(selectedAssignees);
         assignedFields = { assigned_to: assignedTo, assigned_at: assignedTo.length ? new Date().toISOString() : null };
       }
+      const notesChanged = notes !== (alert.alert_notes || "");
       btn.disabled = true;
       document.getElementById("modalSaveStatus").textContent = "Saving…";
       try {
         await callApi(`/alerts/${alert.id}`, {
           method: "PATCH",
-          body: JSON.stringify({ alert_notes: notes, snoozed_today: nextSnoozed, ...assignedFields })
+          body: JSON.stringify({ ...(notesChanged ? { alert_notes: notes } : {}), snoozed_today: nextSnoozed, ...assignedFields })
         });
         await Promise.all([loadAlerts(), loadMetrics()]);
         closeModal();
@@ -1232,12 +1233,13 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
         const assignedTo = Array.from(selectedAssignees);
         assignedFields = { assigned_to: assignedTo, assigned_at: assignedTo.length ? new Date().toISOString() : null };
       }
+      const notesChanged = notes !== (alert.alert_notes || "");
       btn.disabled = true;
       document.getElementById("modalSaveStatus").textContent = "Saving…";
       try {
         await callApi(`/alerts/${alert.id}`, {
           method: "PATCH",
-          body: JSON.stringify({ alert_notes: notes, bill_pulled: true, ...assignedFields })
+          body: JSON.stringify({ ...(notesChanged ? { alert_notes: notes } : {}), bill_pulled: true, ...assignedFields })
         });
         await Promise.all([loadAlerts(), loadMetrics()]);
         closeModal();
