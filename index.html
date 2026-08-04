@@ -257,6 +257,7 @@
     border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
   }
   .modal-buttons button.pulled-btn:hover{ background:var(--pulled-bg); }
+  .modal-buttons button.pulled-btn.active{ background:var(--pulled); color:#fff; }
 
   /* ---- Popup (replaces window.alert) ---- */
   #popupOverlay{
@@ -1121,7 +1122,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
         <div class="modal-buttons">
           <button class="keystone" onclick="window.open('${keystoneUrl(alert)}', '_blank')">Open in Keystone</button>
           ${!alert.entered && (!isCritical || alert.snoozed_today) ? `<button class="snooze-btn ${alert.snoozed_today ? "active" : ""}" id="modalSnoozeBtn" data-snoozed="${!!alert.snoozed_today}">${alert.snoozed_today ? "Unsnooze" : "Snooze"}</button>` : ""}
-          ${!alert.entered && !alert.bill_pulled ? `<button class="pulled-btn" id="modalBillPulledBtn">Mark bill pulled</button>` : ""}
+          ${!alert.entered ? `<button class="pulled-btn ${alert.bill_pulled ? "active" : ""}" id="modalBillPulledBtn" data-bill-pulled="${!!alert.bill_pulled}">${alert.bill_pulled ? "Mark not bill pulled" : "Mark bill pulled"}</button>` : ""}
           <button class="save" id="modalSaveBtn">Save changes</button>
         </div>
       </div>
@@ -1227,6 +1228,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     const modalBillPulledBtn = document.getElementById("modalBillPulledBtn");
     if (modalBillPulledBtn) modalBillPulledBtn.addEventListener("click", async (e) => {
       const btn = e.currentTarget;
+      const nextBillPulled = btn.dataset.billPulled !== "true";
       const notes = document.getElementById("modalNotesInput").value;
       let assignedFields = {};
       if (ASSIGNMENT_ENABLED) {
@@ -1239,7 +1241,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
       try {
         await callApi(`/alerts/${alert.id}`, {
           method: "PATCH",
-          body: JSON.stringify({ ...(notesChanged ? { alert_notes: notes } : {}), bill_pulled: true, ...assignedFields })
+          body: JSON.stringify({ ...(notesChanged ? { alert_notes: notes } : {}), bill_pulled: nextBillPulled, ...assignedFields })
         });
         await Promise.all([loadAlerts(), loadMetrics()]);
         closeModal();
@@ -1247,7 +1249,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
         btn.disabled = false;
         document.getElementById("modalSaveStatus").textContent = "";
         console.error("Bill pulled update failed", err);
-        showPopup("Couldn't mark bill pulled. Check console for details.");
+        showPopup("Couldn't update bill pulled state. Check console for details.");
       }
     });
   }
