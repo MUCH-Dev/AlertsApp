@@ -588,6 +588,12 @@
     return `<span class="assignee-badge" title="${title}">${labels}</span>`;
   }
 
+  function sameAssignees(a, b) {
+    if (a.length !== b.length) return false;
+    const bSet = new Set(b);
+    return a.every(x => bSet.has(x));
+  }
+
   const SORT_KEYS = {
     client_code: alert => alert.client_code,
     client_name: alert => alert.client_name,
@@ -1154,7 +1160,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
       assigneePanel.addEventListener("change", (e) => {
         if (!e.target.classList.contains("assigneeOption")) return;
         const m = e.target.dataset.member;
-        if (e.target.checked) selectedAssignees.add(m); else selectedAssignees.delete(m);
+        if (e.target.checked) selectedAssignees = new Set([m]); else selectedAssignees.delete(m);
         renderAssigneeChips();
         renderAssigneePanel(assigneeSearchInput.value);
       });
@@ -1201,7 +1207,9 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
       let assignedFields = {};
       if (ASSIGNMENT_ENABLED) {
         const assignedTo = Array.from(selectedAssignees);
-        assignedFields = { assigned_to: assignedTo, assigned_at: assignedTo.length ? new Date().toISOString() : null };
+        if (!sameAssignees(assignedTo, alert.assigned_to || [])) {
+          assignedFields = { assigned_to: assignedTo, assigned_at: assignedTo.length ? new Date().toISOString() : null };
+        }
       }
       const notesChanged = notes !== (alert.alert_notes || "");
       btn.disabled = true;
@@ -1233,7 +1241,9 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
       let assignedFields = {};
       if (ASSIGNMENT_ENABLED) {
         const assignedTo = Array.from(selectedAssignees);
-        assignedFields = { assigned_to: assignedTo, assigned_at: assignedTo.length ? new Date().toISOString() : null };
+        if (!sameAssignees(assignedTo, alert.assigned_to || [])) {
+          assignedFields = { assigned_to: assignedTo, assigned_at: assignedTo.length ? new Date().toISOString() : null };
+        }
       }
       const notesChanged = notes !== (alert.alert_notes || "");
       btn.disabled = true;
