@@ -112,6 +112,10 @@
     position:sticky; top:0; background:#F7F8FA; text-align:left; font-size:11px; color:var(--muted);
     text-transform:uppercase; letter-spacing:.04em; padding:9px 10px; border-bottom:1px solid var(--border);
   }
+  .grid-table thead th.sortable{ cursor:pointer; user-select:none; }
+  .grid-table thead th.sortable:hover{ color:var(--ink); }
+  .sort-indicator{ display:inline-block; width:10px; margin-left:2px; opacity:.35; }
+  .grid-table thead th.sort-active .sort-indicator{ opacity:1; color:var(--ink); }
   .grid-table tbody td{ padding:9px 10px; font-size:12.5px; border-bottom:1px solid var(--border); }
   .grid-table tbody tr:last-child td{ border-bottom:none; }
   .grid-table tbody tr:hover{ background:#F7F8FA; }
@@ -417,15 +421,15 @@
         <thead>
           <tr>
             <th></th>
-            <th>Client code</th>
-            <th>Client name</th>
-            <th>Vendor</th>
-            <th>Account #</th>
-            <th>Status</th>
-            <th class="col-assigned">Assigned</th>
-            <th>Last bill</th>
-            <th>Billing period</th>
-            <th>Days on alert</th>
+            <th class="sortable" data-sort="client_code">Client code<span class="sort-indicator"></span></th>
+            <th class="sortable" data-sort="client_name">Client name<span class="sort-indicator"></span></th>
+            <th class="sortable" data-sort="vendor">Vendor<span class="sort-indicator"></span></th>
+            <th class="sortable" data-sort="account_number">Account #<span class="sort-indicator"></span></th>
+            <th class="sortable" data-sort="status">Status<span class="sort-indicator"></span></th>
+            <th class="sortable col-assigned" data-sort="assigned">Assigned<span class="sort-indicator"></span></th>
+            <th class="sortable" data-sort="last_bill_date">Last bill<span class="sort-indicator"></span></th>
+            <th class="sortable" data-sort="billing_period">Billing period<span class="sort-indicator"></span></th>
+            <th class="sortable" data-sort="days_alerted">Days on alert<span class="sort-indicator"></span></th>
             <th></th>
           </tr>
         </thead>
@@ -473,6 +477,8 @@
   let clientSearchDebounce = null;
   let accountSearchDebounce = null;
   let currentAlerts = [];
+  let sortColumn = null;
+  let sortDirection = "asc";
   let selectedIds = new Set();
   let teamMembers = [];
   let allVendors = [];
@@ -501,7 +507,8 @@
       document.getElementById("gallery").innerHTML = currentAlerts.map(renderCard).join("");
       document.getElementById("gridBody").innerHTML = "";
     } else {
-      document.getElementById("gridBody").innerHTML = currentAlerts.map(renderRow).join("");
+      const rows = sortColumn ? currentAlerts.slice().sort(sortComparator(sortColumn, sortDirection)) : currentAlerts;
+      document.getElementById("gridBody").innerHTML = rows.map(renderRow).join("");
       document.getElementById("gallery").innerHTML = "";
     }
   }
@@ -573,6 +580,49 @@
     const labels = list.map(email => escapeHtml(email.split("@")[0])).join(", ");
     const title = escapeHtml(list.join(", "));
     return `<span class="assignee-badge" title="${title}">${labels}</span>`;
+  }
+
+  const SORT_KEYS = {
+    client_code: alert => alert.client_code,
+    client_name: alert => alert.client_name,
+    vendor: alert => alert.vendor,
+    account_number: alert => alert.account_number,
+    status: alert => {
+      const isCritical = (alert.days_since_last_bill != null && alert.days_since_last_bill >= criticalThresholdDays(alert));
+      const isSnoozed = !!alert.snoozed_today;
+      return (isCritical ? "Critical " : "") + (isSnoozed ? "Snoozed " : "") + statusInfo(alert).label;
+    },
+    assigned: alert => (alert.assigned_to || []).map(email => email.split("@")[0]).join(", "),
+    last_bill_date: alert => alert.last_bill_date,
+    billing_period: alert => alert.billing_period,
+    days_alerted: alert => alert.days_alerted
+  };
+
+  const NUMERIC_SORT_KEYS = new Set(["days_alerted"]);
+
+  function sortComparator(key, direction) {
+    const getValue = SORT_KEYS[key];
+    const numeric = NUMERIC_SORT_KEYS.has(key);
+    const dir = direction === "desc" ? -1 : 1;
+    return (a, b) => {
+      const va = getValue(a);
+      const vb = getValue(b);
+      const aEmpty = va === null || va === undefined || va === "";
+      const bEmpty = vb === null || vb === undefined || vb === "";
+      if (aEmpty && bEmpty) return 0;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+      if (numeric) return (va - vb) * dir;
+      return String(va).localeCompare(String(vb), undefined, { sensitivity: "base" }) * dir;
+    };
+  }
+
+  function updateSortIndicators() {
+    document.querySelectorAll(".grid-table thead th[data-sort]").forEach(th => {
+      const isActive = th.dataset.sort === sortColumn;
+      th.classList.toggle("sort-active", isActive);
+      th.querySelector(".sort-indicator").textContent = isActive ? (sortDirection === "asc" ? "▲" : "▼") : "";
+    });
   }
 
   function renderCard(alert) {
@@ -858,6 +908,20 @@
 
   document.getElementById("gallery").addEventListener("click", handleAlertContainerClick);
   document.getElementById("gridBody").addEventListener("click", handleAlertContainerClick);
+
+  document.querySelector(".grid-table thead").addEventListener("click", (e) => {
+    const th = e.target.closest("th[data-sort]");
+    if (!th) return;
+    const key = th.dataset.sort;
+    if (sortColumn === key) {
+      sortDirection = sortDirection === "asc" ? "desc" : "asc";
+    } else {
+      sortColumn = key;
+      sortDirection = "asc";
+    }
+    updateSortIndicators();
+    applyViewMode();
+  });
 
   function updateBatchBar() {
     document.getElementById("batchCount").textContent = selectedIds.size + " selected";
