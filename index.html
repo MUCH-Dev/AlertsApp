@@ -963,25 +963,23 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
 
     const now = new Date().toISOString();
     const ids = Array.from(selectedIds);
-    const pairs = ids.map(id => ({ id, alert: currentAlerts.find(a => String(a.id) === String(id)) }));
-    const stale = pairs.filter(p => !p.alert);
-    const valid = pairs.filter(p => p.alert);
+    const valid = ids.filter(id => currentAlerts.some(a => String(a.id) === String(id)));
+    const stale = ids.filter(id => !currentAlerts.some(a => String(a.id) === String(id)));
 
     if (stale.length > 0) {
       console.warn(
         "Batch assign: skipped stale selection (alert no longer in loaded list)",
-        stale.map(p => p.id)
+        stale
       );
     }
 
     const results = await Promise.allSettled(
-      valid.map(({ id, alert }) => {
-        const nextAssignedTo = Array.from(new Set([...(alert.assigned_to || []), assignee]));
-        return callApi(`/alerts/${id}`, {
+      valid.map(id =>
+        callApi(`/alerts/${id}`, {
           method: "PATCH",
-          body: JSON.stringify({ assigned_to: nextAssignedTo, assigned_at: now })
-        });
-      })
+          body: JSON.stringify({ assigned_to: [assignee], assigned_at: now })
+        })
+      )
     );
 
     const failed = results.filter(r => r.status === "rejected").length + stale.length;
