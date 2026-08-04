@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Watchtower — Release Notes</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AD%3C/text%3E%3C/svg%3E">
+<style>
+  :root{
+    --ink:#1E2530;
+    --paper:#F3F5F7;
+    --paper-raised:#FFFFFF;
+    --line:#D7DCE2;
+    --muted:#5B6572;
+    --accent:#B87527;
+    --accent-deep:#8F5B1C;
+    --good:#2E8B77;
+    --good-bg:#E3F1EE;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ink:#EDEFF2;
+      --paper:#141922;
+      --paper-raised:#1B2230;
+      --line:#2B3340;
+      --muted:#97A1AD;
+      --accent:#E0A24B;
+      --accent-deep:#F0B563;
+      --good:#4FBFA4;
+      --good-bg:#173229;
+    }
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif;
+    font-size:16.5px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .sheet{
+    max-width:700px;
+    margin:0 auto;
+    padding:56px 28px 80px;
+  }
+
+  /* ---- Masthead ---- */
+  .masthead{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    padding-bottom:18px;
+    border-bottom:2px solid var(--ink);
+    margin-bottom:28px;
+    flex-wrap:wrap;
+  }
+  .wordmark-group{ display:flex; align-items:center; gap:10px; }
+  .beacon{
+    width:11px; height:11px; border-radius:50%;
+    background:var(--accent);
+    box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+    flex:none;
+  }
+  .wordmark{
+    font-family:ui-sans-serif, "Helvetica Neue", Arial, sans-serif;
+    font-weight:800;
+    font-size:22px;
+    letter-spacing:-0.01em;
+    color:var(--ink);
+    text-transform:uppercase;
+  }
+  .masthead-meta{
+    font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size:11.5px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--muted);
+    text-align:right;
+    line-height:1.5;
+  }
+
+  .eyebrow{
+    font-family:ui-sans-serif, "Helvetica Neue", Arial, sans-serif;
+    font-size:11.5px;
+    font-weight:700;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin:0 0 6px;
+  }
+  h1{
+    font-family:Georgia, 'Iowan Old Style', serif;
+    font-size:28px;
+    font-weight:400;
+    line-height:1.25;
+    text-wrap:balance;
+    margin:0 0 18px;
+    color:var(--ink);
+  }
+  .intro{
+    color:var(--muted);
+    margin:0 0 8px;
+    max-width:64ch;
+  }
+
+  .status-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    font-family:ui-sans-serif, "Helvetica Neue", Arial, sans-serif;
+    font-size:12px;
+    font-weight:600;
+    letter-spacing:.03em;
+    color:var(--good);
+    background:var(--good-bg);
+    padding:5px 12px 5px 9px;
+    border-radius:999px;
+    margin:18px 0 40px;
+  }
+  .status-pill .dot{
+    width:6px; height:6px; border-radius:50%;
+    background:var(--good);
+  }
+
+  /* ---- Log rail ---- */
+  .log{
+    position:relative;
+    padding-left:26px;
+    border-left:1px solid var(--line);
+  }
+  .entry{
+    position:relative;
+    padding-bottom:38px;
+  }
+  .entry:last-child{ padding-bottom:4px; }
+  .entry::before{
+    content:"";
+    position:absolute;
+    left:-31px;
+    top:5px;
+    width:9px; height:9px;
+    background:var(--accent);
+    border:2px solid var(--paper);
+    outline:1px solid var(--line);
+  }
+  .entry-head{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:6px;
+  }
+  .entry-icon{
+    flex:none;
+    width:20px; height:20px;
+    color:var(--accent);
+  }
+  .entry-icon svg{ display:block; width:100%; height:100%; }
+  h2{
+    font-family:Georgia, 'Iowan Old Style', serif;
+    font-size:19px;
+    font-weight:700;
+    margin:0;
+    color:var(--ink);
+  }
+  .entry p{
+    margin:0;
+    color:var(--ink);
+    max-width:62ch;
+  }
+  .entry p + p{ margin-top:10px; }
+  .fine{
+    color:var(--muted);
+    font-size:14.5px;
+  }
+
+  hr.rule{
+    border:none;
+    border-top:1px solid var(--line);
+    margin:46px 0 26px;
+  }
+
+  footer{
+    font-family:ui-sans-serif, "Helvetica Neue", Arial, sans-serif;
+    font-size:13.5px;
+    color:var(--muted);
+    display:flex;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  footer a{ color:var(--accent-deep); }
+
+  @media (max-width:520px){
+    .masthead{ flex-direction:column; align-items:flex-start; }
+    .masthead-meta{ text-align:left; }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="masthead">
+    <div class="wordmark-group">
+      <span class="beacon" aria-hidden="true"></span>
+      <span class="wordmark">Watchtower</span>
+    </div>
+    <div class="masthead-meta">Release Notes<br>Prepared 2026-08-04</div>
+  </div>
+
+  <p class="eyebrow">What's new</p>
+  <h1>Five updates to how you track, sort, and act on alerts.</h1>
+  <p class="intro">This round of changes is aimed at three things: keeping the list current without babysitting it, letting you act on an alert without leaving its detail card, and making it faster to handle a batch of alerts at once. Here's what's changing and why it should make the day-to-day a bit smoother.</p>
+
+  <div class="status-pill"><span class="dot" aria-hidden="true"></span>Live now</div>
+
+  <div class="log">
+
+    <div class="entry">
+      <div class="entry-head">
+        <span class="entry-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 11a8 8 0 1 0-2.6 6.2"/>
+            <polyline points="20 4 20 11 13 11"/>
+          </svg>
+        </span>
+        <h2>The list keeps itself current</h2>
+      </div>
+      <p>Alerts and the summary tiles at the top now refresh on their own every fifteen seconds, so a teammate's status change, snooze, or assignment shows up without you reloading the page. If you've got a card open or alerts checked off, it holds off until you're done — nothing gets refreshed out from under you mid-task.</p>
+    </div>
+
+    <div class="entry">
+      <div class="entry-head">
+        <span class="entry-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 4v16M7 4l-3 3M7 4l3 3"/>
+            <path d="M17 20V4M17 20l-3-3M17 20l3-3"/>
+          </svg>
+        </span>
+        <h2>Every column in Grid view now sorts</h2>
+      </div>
+      <p>Client Code, Vendor, Status, Assigned, Last Bill, Days on Alert — click any header to sort by it, click again to reverse the order. Handy for lining up everyone's oldest bills, or grouping by who's carrying what.</p>
+    </div>
+
+    <div class="entry">
+      <div class="entry-head">
+        <span class="entry-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M12 7v5l3.2 1.9"/>
+          </svg>
+        </span>
+        <h2>Snooze and Bill Pulled, right from the card</h2>
+      </div>
+      <p>Open an alert's detail card and you'll now find Snooze and Mark Bill Pulled sitting alongside Save — no more popping back out to the list to do it. Marked Bill Pulled by mistake? It's a real toggle now, so you can switch it back without touching the checkbox that used to hide once you'd used it.</p>
+    </div>
+
+    <div class="entry">
+      <div class="entry-head">
+        <span class="entry-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        </span>
+        <h2>Assignment, cleaned up</h2>
+      </div>
+      <p>A couple of quiet fixes to who's-assigned-to-what: switching assignees now correctly hands the alert to the new person instead of leaving both names attached, and clicking Snooze or Bill Pulled no longer resets the assignment clock if you didn't actually change who's on it.</p>
+    </div>
+
+    <div class="entry">
+      <div class="entry-head">
+        <span class="entry-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="3" width="7" height="7" rx="1"/>
+            <path d="M5 6.5l1.2 1.2L8.5 5"/>
+            <path d="M16 6.5l1.2 1.2L19.5 5"/>
+          </svg>
+        </span>
+        <h2>Assign a batch of alerts in one go</h2>
+      </div>
+      <p>Check off several alerts in the list, pick a teammate from the bar at the top, and hand them all off in a single action — no more opening each one individually to reassign it.</p>
+    </div>
+
+  </div>
+
+  <hr class="rule">
+
+  <footer>
+    <span>Watchtower · Internal Alerts</span>
+    <span>Questions or something look off? Flag it to the team.</span>
+  </footer>
+
+</div>
+</body>
+</html>
