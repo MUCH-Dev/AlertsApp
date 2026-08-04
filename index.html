@@ -121,6 +121,7 @@
   .grid-table tbody tr:hover{ background:#F7F8FA; }
   .assignment-off .col-assigned{ display:none; }
   .assignment-off .assignee-field{ display:none; }
+  body.assignment-off .assignField{ display:none; }
   .row-card td:first-child{ border-left:4px solid var(--pending); }
   .row-card.status-pulled td:first-child{ border-left-color:var(--pulled); }
   .row-card.status-entered td:first-child{ border-left-color:var(--entered); }
@@ -291,7 +292,7 @@
   }
   .batchbar button:hover{ background:#3a6ef0; }
   .batchbar button:disabled{ opacity:.5; cursor:not-allowed; }
-  .batchbar .snooze-btn{ background:var(--snoozed); color:#fff; border:none; margin-left:auto; }
+  .batchbar .snooze-btn{ background:var(--snoozed); color:#fff; border:none; }
   .batchbar .snooze-btn:hover{ background:#6d4fa8; }
 
   .card-check{ display:none; margin-right:6px; }
@@ -474,11 +475,6 @@
   const msalInstance = new msal.PublicClientApplication(msalConfig);
 
   const ASSIGNMENT_ENABLED = true;
-  // Batch-assign (multiple alerts -> one person) is out of scope for the
-  // multi-assignee trial — only the per-alert modal picker is gated by the
-  // flag below. This stays hidden unconditionally until batch-assign is
-  // redesigned for the array-based assigned_to contract.
-  document.getElementById("assignControls").style.display = "none";
   document.body.classList.toggle("assignment-off", !ASSIGNMENT_ENABLED);
 
   let statusFilter = "Active";
@@ -809,6 +805,19 @@
     }
   }
 
+  function populateBatchAssignSelect() {
+    const select = document.getElementById("batchAssignInput");
+    if (!select) return;
+    if (teamMembers.length === 0) {
+      select.innerHTML = '<option value="" disabled selected>No team members available</option>';
+      select.disabled = true;
+      return;
+    }
+    select.disabled = false;
+    select.innerHTML = '<option value="" disabled selected>Select a teammate…</option>' +
+      teamMembers.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
+  }
+
   function activeListContainer() {
     return viewMode === "gallery" ? document.getElementById("gallery") : document.getElementById("gridBody");
   }
@@ -942,32 +951,53 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
 });
   document.getElementById("batchAssignBtn").addEventListener("click", async () => {
     const assignee = document.getElementById("batchAssignInput").value.trim();
-    if (!assignee || selectedIds.size === 0) return;
+    if (selectedIds.size === 0) return;
+    if (!assignee) {
+      showPopup("Pick a teammate first.");
+      return;
+    }
 
     const btn = document.getElementById("batchAssignBtn");
     btn.disabled = true;
     btn.textContent = "Assigning…";
 
     const now = new Date().toISOString();
-    try {
-      await Promise.all(
-        Array.from(selectedIds).map(id =>
-          callApi(`/alerts/${id}`, {
-            method: "PATCH",
-            body: JSON.stringify({ assigned_to: assignee, assigned_at: now })
-          })
-        )
+    const ids = Array.from(selectedIds);
+    const valid = ids.filter(id => currentAlerts.some(a => String(a.id) === String(id)));
+    const stale = ids.filter(id => !currentAlerts.some(a => String(a.id) === String(id)));
+
+    if (stale.length > 0) {
+      console.warn(
+        "Batch assign: skipped stale selection (alert no longer in loaded list)",
+        stale
       );
-      selectedIds.clear();
-      document.getElementById("batchAssignInput").value = "";
-      updateBatchBar();
-      btn.textContent = "Assign selected";
-      await loadAlerts();
-    } catch (err) {
-      btn.textContent = "Assign selected";
-      btn.disabled = false;
-      console.error("Batch assign failed", err);
-      showPopup("Some assignments may have failed. Check console for details.");
+    }
+
+    const results = await Promise.allSettled(
+      valid.map(id =>
+        callApi(`/alerts/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ assigned_to: [assignee], assigned_at: now })
+        })
+      )
+    );
+
+    const failed = results.filter(r => r.status === "rejected").length + stale.length;
+    selectedIds.clear();
+    document.getElementById("batchAssignInput").value = "";
+    updateBatchBar();
+    btn.textContent = "Assign selected";
+    await Promise.all([loadAlerts(), loadMetrics()]);
+
+    if (failed > 0) {
+      const rejected = results.filter(r => r.status === "rejected");
+      if (rejected.length > 0) {
+        console.error("Batch assign: failures", rejected);
+      }
+      const parts = [];
+      if (rejected.length > 0) parts.push(`${rejected.length} failed`);
+      if (stale.length > 0) parts.push(`${stale.length} skipped (stale selection)`);
+      showPopup(`Assigned ${ids.length - failed} of ${ids.length} — ${parts.join(", ")}. Check console for details.`);
     }
   });
 
@@ -1328,6 +1358,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     document.getElementById("whoLabel").textContent = account.username;
 
     await Promise.all([loadMetrics(), loadVendors(), ...(ASSIGNMENT_ENABLED ? [loadTeamMembers()] : [])]);
+    if (ASSIGNMENT_ENABLED) populateBatchAssignSelect();
     await loadAlerts();
     startAutoRefresh();
   }
