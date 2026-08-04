@@ -252,6 +252,11 @@
     background:none; border:1px solid var(--accent); color:var(--accent); padding:9px 16px;
     border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
   }
+  .modal-buttons button.pulled-btn{
+    background:none; border:1px solid var(--pulled); color:var(--pulled); padding:9px 16px;
+    border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
+  .modal-buttons button.pulled-btn:hover{ background:var(--pulled-bg); }
 
   /* ---- Popup (replaces window.alert) ---- */
   #popupOverlay{
@@ -1097,11 +1102,6 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
       ${(() => { const latest = displayNote(alert.latest_account_note, null); return latest ? `<div class="modal-field"><label>Latest V5 note</label><div class="modal-readonly">${escapeHtml(latest)}</div></div>` : ""; })()}
 
       <div class="modal-field">
-        <label><input type="checkbox" id="modalBillPulledInput" ${alert.bill_pulled ? "checked" : ""} ${alert.entered ? "disabled" : ""}> Bill pulled</label>
-        ${alert.entered ? `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;">Already entered — bill pulled status no longer applies.</div>` : ""}
-      </div>
-
-      <div class="modal-field">
         <label>Add V5 note</label>
         <textarea id="modalNotesInput">${escapeHtml(alert.alert_notes || "")}</textarea>
       </div>
@@ -1120,6 +1120,8 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
         <span class="modal-save-status" id="modalSaveStatus"></span>
         <div class="modal-buttons">
           <button class="keystone" onclick="window.open('${keystoneUrl(alert)}', '_blank')">Open in Keystone</button>
+          ${!alert.entered && (!isCritical || alert.snoozed_today) ? `<button class="snooze-btn ${alert.snoozed_today ? "active" : ""}" id="modalSnoozeBtn" data-snoozed="${alert.snoozed_today}">${alert.snoozed_today ? "Unsnooze" : "Snooze"}</button>` : ""}
+          ${!alert.entered && !alert.bill_pulled ? `<button class="pulled-btn" id="modalBillPulledBtn">Mark bill pulled</button>` : ""}
           <button class="save" id="modalSaveBtn">Save changes</button>
         </div>
       </div>
@@ -1167,8 +1169,6 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     document.getElementById("modalSaveBtn").addEventListener("click", async () => {
       const statusEl = document.getElementById("modalSaveStatus");
       const notes = document.getElementById("modalNotesInput").value;
-      const billPulledEl = document.getElementById("modalBillPulledInput");
-      const billPulled = billPulledEl.disabled ? alert.bill_pulled : billPulledEl.checked;
       let assignedFields = {};
       if (ASSIGNMENT_ENABLED) {
         const assignedTo = Array.from(selectedAssignees);
@@ -1181,7 +1181,6 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
           method: "PATCH",
           body: JSON.stringify({
             alert_notes: notes,
-            bill_pulled: billPulled,
             ...assignedFields
           })
         });
@@ -1190,6 +1189,63 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
       } catch (err) {
         statusEl.textContent = "Failed to save";
         console.error(err);
+      }
+    });
+
+    const modalSnoozeBtn = document.getElementById("modalSnoozeBtn");
+    if (modalSnoozeBtn) modalSnoozeBtn.addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      const nextSnoozed = btn.dataset.snoozed !== "true";
+      const notes = document.getElementById("modalNotesInput").value;
+      let assignedFields = {};
+      if (ASSIGNMENT_ENABLED) {
+        const assignedTo = Array.from(selectedAssignees);
+        assignedFields = { assigned_to: assignedTo, assigned_at: assignedTo.length ? new Date().toISOString() : null };
+      }
+      btn.disabled = true;
+      document.getElementById("modalSaveStatus").textContent = "Saving…";
+      try {
+        await callApi(`/alerts/${alert.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ alert_notes: notes, snoozed_today: nextSnoozed, ...assignedFields })
+        });
+        await Promise.all([loadAlerts(), loadMetrics()]);
+        closeModal();
+      } catch (err) {
+        btn.disabled = false;
+        document.getElementById("modalSaveStatus").textContent = "";
+        console.error("Snooze toggle failed", err);
+        if (err.message.includes("Cannot snooze a Critical alert")) {
+          showPopup("Critical alerts cannot be snoozed.");
+        } else {
+          showPopup("Couldn't update snooze state. Check console for details.");
+        }
+      }
+    });
+
+    const modalBillPulledBtn = document.getElementById("modalBillPulledBtn");
+    if (modalBillPulledBtn) modalBillPulledBtn.addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      const notes = document.getElementById("modalNotesInput").value;
+      let assignedFields = {};
+      if (ASSIGNMENT_ENABLED) {
+        const assignedTo = Array.from(selectedAssignees);
+        assignedFields = { assigned_to: assignedTo, assigned_at: assignedTo.length ? new Date().toISOString() : null };
+      }
+      btn.disabled = true;
+      document.getElementById("modalSaveStatus").textContent = "Saving…";
+      try {
+        await callApi(`/alerts/${alert.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ alert_notes: notes, bill_pulled: true, ...assignedFields })
+        });
+        await Promise.all([loadAlerts(), loadMetrics()]);
+        closeModal();
+      } catch (err) {
+        btn.disabled = false;
+        document.getElementById("modalSaveStatus").textContent = "";
+        console.error("Bill pulled update failed", err);
+        showPopup("Couldn't mark bill pulled. Check console for details.");
       }
     });
   }
