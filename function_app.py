@@ -9,10 +9,13 @@ from azure.identity import DefaultAzureCredential
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
 # Mirror of criticalThresholdDays() in index.html — keep in sync
+# Critical = billing-cycle length + 15 days (2026-08-05): monthly = 30-day
+# cycle + 15 = 45 (unchanged), quarterly = 90-day cycle + 15 = 105 (was 75).
+# Anything else keeps the flat 65-day fallback, not this formula.
 CRITICAL_THRESHOLD_SQL = """
     CASE
         WHEN LOWER(LTRIM(RTRIM(billing_period))) = 'monthly' THEN 45
-        WHEN LOWER(LTRIM(RTRIM(billing_period))) = 'quarterly' THEN 75
+        WHEN LOWER(LTRIM(RTRIM(billing_period))) = 'quarterly' THEN 105
         ELSE 65
     END
 """

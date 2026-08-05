@@ -573,10 +573,13 @@
   }
 
   // Mirror of CRITICAL_THRESHOLD_SQL in function_app.py — keep in sync
+  // Critical = billing-cycle length + 15 days (2026-08-05): monthly = 30-day
+  // cycle + 15 = 45 (unchanged), quarterly = 90-day cycle + 15 = 105 (was 75).
+  // Anything else keeps the flat 65-day fallback, not this formula.
   function criticalThresholdDays(alert) {
     const period = String(alert.billing_period || "").trim().toLowerCase();
     if (period === "monthly") return 45;
-    if (period === "quarterly") return 75;
+    if (period === "quarterly") return 105;
     return 65;
   }
 
