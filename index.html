@@ -72,13 +72,12 @@
 
   /* ---- Metrics strip ---- */
   .metrics{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
-  .metric{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+  .metric{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; cursor:help; }
   .metric .num{ font-family:'Space Grotesk'; font-size:24px; font-weight:700; }
   .metric .label{ font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-top:2px; }
   .metric.pending .num{ color:var(--pending); }
   .metric.critical .num{ color:var(--critical); }
   .metric.entered .num{ color:var(--entered); }
-  .metric.total{ cursor:help; }
 
   /* ---- Filter bar ---- */
   .filterbar{
@@ -361,9 +360,9 @@
     </div>
 
     <div class="metrics">
-      <div class="metric pending"><div class="num" id="metricPending">–</div><div class="label">Pending</div></div>
-      <div class="metric critical"><div class="num" id="metricCritical">–</div><div class="label">Critical</div></div>
-      <div class="metric entered"><div class="num" id="metricEntered">–</div><div class="label">Entered</div></div>
+      <div class="metric pending" title="Not yet entered, not marked Bill Pulled, and not snoozed today — the alerts still needing action."><div class="num" id="metricPending">–</div><div class="label">Pending</div></div>
+      <div class="metric critical" title="Not yet entered and past this account's billing-cycle grace period, and not snoozed today. An alert already marked Bill Pulled can still show here — unlike Pending, Critical doesn't check Bill Pulled."><div class="num" id="metricCritical">–</div><div class="label">Critical</div></div>
+      <div class="metric entered" title="The bill has been entered in V5 — regardless of whether it was ever Critical, Bill Pulled, or Snoozed along the way."><div class="num" id="metricEntered">–</div><div class="label">Entered</div></div>
       <div class="metric total" title="Every alert loaded today — not just Pending + Entered. Snoozed alerts and Bill-Pulled-but-not-yet-Entered alerts count here too, even though they're excluded from Pending."><div class="num" id="metricTotal">–</div><div class="label">Total today</div></div>
     </div>
 
