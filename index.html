@@ -153,7 +153,7 @@
     font-size:11px; font-weight:600; background:#EEF1F5; color:var(--muted);
     padding:2px 7px; border-radius:5px;
   }
-  .status-pill{ font-size:11px; font-weight:700; border-radius:12px; padding:3px 10px; white-space:nowrap; cursor:help; }
+  .status-pill{ font-size:11px; font-weight:700; border-radius:12px; padding:3px 10px; white-space:nowrap; }
   .pill-group{ display:flex; gap:6px; align-items:center; }
   .status-pill.pending{ background:var(--pending-bg); color:var(--pending); }
   .status-pill.pulled{ background:var(--pulled-bg); color:var(--pulled); }
@@ -579,19 +579,6 @@
     return { cls: "pending", label: "Pending" };
   }
 
-  // Shared tooltip copy for every status-pill variant — keep this the one
-  // place these strings are written, since each pill is rendered inline in
-  // renderCard()/renderRow()/renderModal() rather than through one function.
-  const STATUS_PILL_TOOLTIPS = {
-    pending: "Outstanding — the bill hasn't been entered in V5 yet.",
-    entered: "The bill has been entered in V5.",
-    pulled: "The bill has been pulled from the vendor, but not entered in V5 yet.",
-    critical: "No new bill in longer than this account's billing cycle allows — flagged as high priority.",
-    snoozed: "Hidden from the Pending count just for today. Reappears automatically tomorrow unless snoozed again.",
-    encumbered: "Account credentials are marked Encumbered in Keystone Logins.",
-    arcadia: "Account is enrolled with Arcadia."
-  };
-
   // Mirror of CRITICAL_THRESHOLD_SQL in function_app.py — keep in sync
   // Critical = billing-cycle length + 15 days (2026-08-05): monthly = 30-day
   // cycle + 15 = 45 (unchanged), quarterly = 90-day cycle + 15 = 105 (was 75).
@@ -614,8 +601,8 @@
 
   function credentialBadge(alert) {
     const status = String(alert.credential_status || "").trim().toLowerCase();
-    if (status === "encumbered") return `<span class="status-pill encumbered" title="${STATUS_PILL_TOOLTIPS.encumbered}">Encumbered</span>`;
-    if (status === "arcadia") return `<span class="status-pill arcadia" title="${STATUS_PILL_TOOLTIPS.arcadia}">Arcadia</span>`;
+    if (status === "encumbered") return `<span class="status-pill encumbered">Encumbered</span>`;
+    if (status === "arcadia") return `<span class="status-pill arcadia">Arcadia</span>`;
     return "";
   }
 
@@ -681,7 +668,7 @@
             <span class="client-code">${escapeHtml(alert.client_code)}</span>
           </span>
           <span class="pill-group">
-            ${isCritical ? `<span class="status-pill critical" title="${STATUS_PILL_TOOLTIPS.critical}">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed" title="${STATUS_PILL_TOOLTIPS.snoozed}">Snoozed</span>` : ""}<span class="status-pill ${status.cls}" title="${STATUS_PILL_TOOLTIPS[status.cls]}">${status.label}</span>${credentialBadge(alert)}${assigneeBadge(alert)}
+            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>${credentialBadge(alert)}${assigneeBadge(alert)}
           </span>
         </div>
         <h3>${escapeHtml(alert.client_name)}</h3>
@@ -713,7 +700,7 @@
         <td class="mono">${alert.account_number ? escapeHtml(alert.account_number) : "—"}</td>
         <td>
           <span class="pill-group">
-            ${isCritical ? `<span class="status-pill critical" title="${STATUS_PILL_TOOLTIPS.critical}">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed" title="${STATUS_PILL_TOOLTIPS.snoozed}">Snoozed</span>` : ""}<span class="status-pill ${status.cls}" title="${STATUS_PILL_TOOLTIPS[status.cls]}">${status.label}</span>${credentialBadge(alert)}
+            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>${credentialBadge(alert)}
           </span>
         </td>
         <td class="col-assigned">${assigneeBadge(alert) || "—"}</td>
@@ -1118,7 +1105,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
         <h2>${escapeHtml(alert.client_name)}</h2>
         <button class="modal-close" id="modalCloseBtn">&times;</button>
       </div>
-      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · ${isCritical ? `<span class="status-pill critical" title="${STATUS_PILL_TOOLTIPS.critical}">Critical</span> ` : ""}<span class="status-pill ${status.cls}" title="${STATUS_PILL_TOOLTIPS[status.cls]}">${status.label}</span> ${credentialBadge(alert)}</div>
+      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · ${isCritical ? `<span class="status-pill critical">Critical</span> ` : ""}<span class="status-pill ${status.cls}">${status.label}</span> ${credentialBadge(alert)}</div>
 
       <div class="modal-grid">
         <div><div class="k">Account number</div><div class="v">${escapeHtml(alert.account_number)}</div></div>
