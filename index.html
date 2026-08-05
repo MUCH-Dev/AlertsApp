@@ -1105,7 +1105,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
         <h2>${escapeHtml(alert.client_name)}</h2>
         <button class="modal-close" id="modalCloseBtn">&times;</button>
       </div>
-      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · ${isCritical ? `<span class="status-pill critical">Critical</span> ` : ""}<span class="status-pill ${status.cls}">${status.label}</span></div>
+      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · ${isCritical ? `<span class="status-pill critical">Critical</span> ` : ""}<span class="status-pill ${status.cls}">${status.label}</span> ${credentialBadge(alert)}</div>
 
       <div class="modal-grid">
         <div><div class="k">Account number</div><div class="v">${escapeHtml(alert.account_number)}</div></div>
