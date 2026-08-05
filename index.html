@@ -65,6 +65,8 @@
 }
   .brand h1{ font-family:'Space Grotesk'; font-weight:700; font-size:19px; margin:0; letter-spacing:-0.01em; }
   .brand p{ margin:1px 0 0; font-size:12.5px; color:var(--muted); }
+  .release-notes-link{ display:inline-block; margin-top:3px; font-size:11.5px; color:var(--accent); text-decoration:none; }
+  .release-notes-link:hover{ text-decoration:underline; }
   .who{ display:flex; align-items:center; gap:12px; font-size:12.5px; color:var(--muted); }
   .who button.link{ background:none; border:none; color:var(--accent); cursor:pointer; font-size:12.5px; font-family:inherit; padding:0; }
 
@@ -345,6 +347,7 @@
         <div>
           <h1>Watchtower - Alerts App</h1>
           <p id="viewSubtitle">gallery view · Muc-corp</p>
+          <a href="/release-notes.html" class="release-notes-link" target="_blank" rel="noopener">Release notes</a>
         </div>
         <div class="view-toggle" id="viewToggle">
           <button type="button" data-view="gallery" class="active" aria-label="Gallery view">⊞</button>
