@@ -25,6 +25,10 @@
     --critical-bg:#FBE7E3;
     --snoozed:#7C5CBF;
     --snoozed-bg:#F1ECFB;
+    --encumbered:#B23A6B;
+    --encumbered-bg:#FBE7F0;
+    --arcadia:#0E7C9E;
+    --arcadia-bg:#E3F3F8;
     --accent:#2B5FD9;
   }
   *{box-sizing:border-box;}
@@ -157,6 +161,8 @@
   .status-pill.entered{ background:var(--entered-bg); color:var(--entered); }
   .status-pill.critical{ background:var(--critical-bg); color:var(--critical); }
   .status-pill.snoozed{ background:var(--snoozed-bg); color:var(--snoozed); }
+  .status-pill.encumbered{ background:var(--encumbered-bg); color:var(--encumbered); }
+  .status-pill.arcadia{ background:var(--arcadia-bg); color:var(--arcadia); }
 
   .card.is-critical{ border-left-color:var(--critical); }
   .card.status-snoozed{ border-left-color:var(--snoozed); }
@@ -594,6 +600,13 @@
     return `<span class="assignee-badge" title="${title}">${labels}</span>`;
   }
 
+  function credentialBadge(alert) {
+    const status = String(alert.credential_status || "").trim().toLowerCase();
+    if (status === "encumbered") return `<span class="status-pill encumbered">Encumbered</span>`;
+    if (status === "arcadia") return `<span class="status-pill arcadia">Arcadia</span>`;
+    return "";
+  }
+
   function sameAssignees(a, b) {
     if (a.length !== b.length) return false;
     const bSet = new Set(b);
@@ -656,7 +669,7 @@
             <span class="client-code">${escapeHtml(alert.client_code)}</span>
           </span>
           <span class="pill-group">
-            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>${assigneeBadge(alert)}
+            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>${credentialBadge(alert)}${assigneeBadge(alert)}
           </span>
         </div>
         <h3>${escapeHtml(alert.client_name)}</h3>
@@ -688,7 +701,7 @@
         <td class="mono">${alert.account_number ? escapeHtml(alert.account_number) : "—"}</td>
         <td>
           <span class="pill-group">
-            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>
+            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>${credentialBadge(alert)}
           </span>
         </td>
         <td class="col-assigned">${assigneeBadge(alert) || "—"}</td>
@@ -1093,7 +1106,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
         <h2>${escapeHtml(alert.client_name)}</h2>
         <button class="modal-close" id="modalCloseBtn">&times;</button>
       </div>
-      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · ${isCritical ? `<span class="status-pill critical">Critical</span> ` : ""}<span class="status-pill ${status.cls}">${status.label}</span></div>
+      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · ${isCritical ? `<span class="status-pill critical">Critical</span> ` : ""}<span class="status-pill ${status.cls}">${status.label}</span> ${credentialBadge(alert)}</div>
 
       <div class="modal-grid">
         <div><div class="k">Account number</div><div class="v">${escapeHtml(alert.account_number)}</div></div>
