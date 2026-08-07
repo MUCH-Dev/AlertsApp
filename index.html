@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Watchtower Alerts App</title>
 <link rel="icon" type="image/png" href="watchtower-icon-64.png">
-<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
-
   :root{
     --bg:#F3F5F8;
     --surface:#FFFFFF;
@@ -55,7 +56,7 @@
   button.primary:hover{ background:#3a6ef0; }
 
   /* ---- App shell ---- */
-  .app{ max-width:1240px; margin:0 auto; padding:28px 24px 80px; display:none; }
+  .app{ max-width:1400px; margin:0 auto; padding:28px 24px 80px; display:none; }
 
   .topbar{
     display:flex; justify-content:space-between; align-items:flex-start;
@@ -467,6 +468,7 @@
     </div>
   </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
 <script>
   const CLIENT_ID = "6b04b1f9-b1d4-4366-aa47-12cbd7b9cd27";
   const TENANT_ID = "551cddfb-5bb5-4a53-aec6-063057585725";
