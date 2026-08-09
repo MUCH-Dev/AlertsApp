@@ -629,13 +629,13 @@
 
   // Must match REVIEW_REASON_CODES in frontend/function_app.py exactly.
   const REVIEW_REASONS = [
-    ["rebill", "Rebill"],
+    ["final_bill", "Final Bill"],
     ["invalid_credentials", "Invalid Credentials"],
+    ["rebill", "Rebill"],
+    ["seasonal", "Seasonal"],
     ["vendor_site_unavailable", "Vendor Site Unavailable"],
     ["waiting_on_client", "Waiting on Client"],
     ["waiting_on_vendor", "Waiting on Vendor"],
-    ["final_bill", "Final Bill"],
-    ["seasonal", "Seasonal"],
     ["other", "Other"],
   ];
   const REVIEW_REASON_LABELS = Object.fromEntries(REVIEW_REASONS);
