@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Watchtower Alerts App</title>
 <link rel="icon" type="image/png" href="watchtower-icon-64.png">
-<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
-
   :root{
     --bg:#F3F5F8;
     --surface:#FFFFFF;
@@ -29,6 +30,8 @@
     --encumbered-bg:#FBE7F0;
     --arcadia:#0E7C9E;
     --arcadia-bg:#E3F3F8;
+    --reviewed:#4E6A82;
+    --reviewed-bg:#E8EFF3;
     --accent:#2B5FD9;
   }
   *{box-sizing:border-box;}
@@ -69,6 +72,8 @@
 }
   .brand h1{ font-family:'Space Grotesk'; font-weight:700; font-size:19px; margin:0; letter-spacing:-0.01em; }
   .brand p{ margin:1px 0 0; font-size:12.5px; color:var(--muted); }
+  .release-notes-link{ display:inline-block; margin-top:3px; font-size:11.5px; color:var(--accent); text-decoration:none; }
+  .release-notes-link:hover{ text-decoration:underline; }
   .who{ display:flex; align-items:center; gap:12px; font-size:12.5px; color:var(--muted); }
   .who button.link{ background:none; border:none; color:var(--accent); cursor:pointer; font-size:12.5px; font-family:inherit; padding:0; }
 
@@ -161,6 +166,7 @@
   .status-pill.snoozed{ background:var(--snoozed-bg); color:var(--snoozed); }
   .status-pill.encumbered{ background:var(--encumbered-bg); color:var(--encumbered); }
   .status-pill.arcadia{ background:var(--arcadia-bg); color:var(--arcadia); }
+  .status-pill.reviewed{ background:var(--reviewed-bg); color:var(--reviewed); }
 
   .card.is-critical{ border-left-color:var(--critical); }
   .card.status-snoozed{ border-left-color:var(--snoozed); }
@@ -264,6 +270,12 @@
   }
   .modal-buttons button.pulled-btn:hover{ background:var(--pulled-bg); }
   .modal-buttons button.pulled-btn.active{ background:var(--pulled); color:#fff; }
+  .modal-buttons button.review-btn{
+    background:none; border:1px solid var(--reviewed); color:var(--reviewed); padding:9px 16px;
+    border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
+  .modal-buttons button.review-btn:hover{ background:var(--reviewed-bg); }
+  .modal-buttons button.review-btn.active{ background:var(--reviewed); color:#fff; }
 
   /* ---- Popup (replaces window.alert) ---- */
   #popupOverlay{
@@ -413,6 +425,14 @@
           <button data-assignee="me">Me</button>
         </div>
       </div>
+      <div class="field">
+        <label>Review status</label>
+        <div class="status-seg" id="reviewedSeg">
+          <button data-reviewed="all" class="active">All</button>
+          <button data-reviewed="reviewed">Reviewed</button>
+          <button data-reviewed="unreviewed">Unreviewed</button>
+        </div>
+      </div>
     </div>
 
     <div class="batchbar show" id="batchBar">
@@ -465,6 +485,7 @@
     </div>
   </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
 <script>
   const CLIENT_ID = "6b04b1f9-b1d4-4366-aa47-12cbd7b9cd27";
   const TENANT_ID = "551cddfb-5bb5-4a53-aec6-063057585725";
@@ -487,6 +508,7 @@
   let statusFilter = "Active";
   let typeFilter = "All";
   let assigneeFilter = "all";
+  let reviewedFilter = "all";
   let clientSearchDebounce = null;
   let accountSearchDebounce = null;
   let currentAlerts = [];
@@ -605,6 +627,26 @@
     return "";
   }
 
+  // Must match REVIEW_REASON_CODES in frontend/function_app.py exactly.
+  const REVIEW_REASONS = [
+    ["rebill", "Rebill"],
+    ["invalid_credentials", "Invalid Credentials"],
+    ["vendor_site_unavailable", "Vendor Site Unavailable"],
+    ["waiting_on_client", "Waiting on Client"],
+    ["waiting_on_vendor", "Waiting on Vendor"],
+    ["final_bill", "Final Bill"],
+    ["seasonal", "Seasonal"],
+    ["other", "Other"],
+  ];
+  const REVIEW_REASON_LABELS = Object.fromEntries(REVIEW_REASONS);
+  const REVIEW_REASON_OPTIONS_HTML = REVIEW_REASONS
+    .map(([code, label]) => `<option value="${code}">${escapeHtml(label)}</option>`)
+    .join("");
+
+  function reviewedBadge(alert) {
+    return alert.reviewed ? `<span class="status-pill reviewed">Reviewed</span>` : "";
+  }
+
   function sameAssignees(a, b) {
     if (a.length !== b.length) return false;
     const bSet = new Set(b);
@@ -667,7 +709,7 @@
             <span class="client-code">${escapeHtml(alert.client_code)}</span>
           </span>
           <span class="pill-group">
-            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>${credentialBadge(alert)}${assigneeBadge(alert)}
+            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${reviewedBadge(alert)}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>${credentialBadge(alert)}${assigneeBadge(alert)}
           </span>
         </div>
         <h3>${escapeHtml(alert.client_name)}</h3>
@@ -699,7 +741,7 @@
         <td class="mono">${alert.account_number ? escapeHtml(alert.account_number) : "—"}</td>
         <td>
           <span class="pill-group">
-            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>${credentialBadge(alert)}
+            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${reviewedBadge(alert)}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>${credentialBadge(alert)}
           </span>
         </td>
         <td class="col-assigned">${assigneeBadge(alert) || "—"}</td>
@@ -722,6 +764,7 @@
     if (accountSearch) params.set("account_number_search", accountSearch);
     if (selectedVendors.size > 0) params.set("vendor", Array.from(selectedVendors).join(","));
     if (assigneeFilter === "me") params.set("assignee", "me");
+    if (reviewedFilter !== "all") params.set("reviewed", reviewedFilter === "reviewed" ? "true" : "false");
     return params;
   }
 
@@ -1104,7 +1147,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
         <h2>${escapeHtml(alert.client_name)}</h2>
         <button class="modal-close" id="modalCloseBtn">&times;</button>
       </div>
-      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · ${isCritical ? `<span class="status-pill critical">Critical</span> ` : ""}<span class="status-pill ${status.cls}">${status.label}</span> ${credentialBadge(alert)}</div>
+      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · ${isCritical ? `<span class="status-pill critical">Critical</span> ` : ""}${reviewedBadge(alert)} <span class="status-pill ${status.cls}">${status.label}</span> ${credentialBadge(alert)}</div>
 
       <div class="modal-grid">
         <div><div class="k">Account number</div><div class="v">${escapeHtml(alert.account_number)}</div></div>
@@ -1122,6 +1165,28 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
       ${instructions ? `<div class="modal-field"><label>Account instructions</label><div class="modal-readonly">${instructions}</div></div>` : ""}
 
       ${(() => { const latest = displayNote(alert.latest_account_note, null); return latest ? `<div class="modal-field"><label>Latest V5 note</label><div class="modal-readonly">${escapeHtml(latest)}</div></div>` : ""; })()}
+
+      ${alert.reviewed_by ? `
+      <div class="modal-field">
+        <label>Review history</label>
+        <div class="modal-readonly">
+          Last reviewed by ${escapeHtml(alert.reviewed_by)}${alert.reviewed_at ? ", " + escapeHtml(alert.reviewed_at) : ""}<br>
+          Reason: <b>${escapeHtml(REVIEW_REASON_LABELS[alert.review_reason] || alert.review_reason || "—")}</b>${alert.review_notes ? ` — "${escapeHtml(alert.review_notes)}"` : ""}
+        </div>
+      </div>` : ""}
+
+      ${(isCritical && !alert.entered && !alert.reviewed) ? `
+      <div class="modal-field">
+        <label>Mark reviewed — reason</label>
+        <select id="modalReviewReason">
+          <option value="">— select a reason —</option>
+          ${REVIEW_REASON_OPTIONS_HTML}
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Review notes <span style="text-transform:none; font-weight:400;">(optional — required if "Other")</span></label>
+        <textarea id="modalReviewNotes" placeholder="Add context for the reason above…"></textarea>
+      </div>` : ""}
 
       <div class="modal-field">
         <label>Add V5 note</label>
@@ -1144,6 +1209,8 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
           <button class="keystone" onclick="window.open('${keystoneUrl(alert)}', '_blank')">Open in Keystone</button>
           ${!alert.entered && (!isCritical || alert.snoozed_today) ? `<button class="snooze-btn ${alert.snoozed_today ? "active" : ""}" id="modalSnoozeBtn" data-snoozed="${!!alert.snoozed_today}">${alert.snoozed_today ? "Unsnooze" : "Snooze"}</button>` : ""}
           ${!alert.entered ? `<button class="pulled-btn ${alert.bill_pulled ? "active" : ""}" id="modalBillPulledBtn" data-bill-pulled="${!!alert.bill_pulled}">${alert.bill_pulled ? "Mark not bill pulled" : "Mark bill pulled"}</button>` : ""}
+          ${(isCritical && !alert.entered && !alert.reviewed) ? `<button class="review-btn" id="modalMarkReviewedBtn">Mark Reviewed</button>` : ""}
+          ${alert.reviewed ? `<button class="review-btn active" id="modalClearReviewBtn">Clear review</button>` : ""}
           <button class="save" id="modalSaveBtn">Save changes</button>
         </div>
       </div>
@@ -1277,6 +1344,73 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
         showPopup("Couldn't update bill pulled state. Check console for details.");
       }
     });
+
+    const modalMarkReviewedBtn = document.getElementById("modalMarkReviewedBtn");
+    if (modalMarkReviewedBtn) modalMarkReviewedBtn.addEventListener("click", async () => {
+      const reasonSelect = document.getElementById("modalReviewReason");
+      const reason = reasonSelect.value;
+      const notes = document.getElementById("modalReviewNotes").value.trim();
+      if (!reason) {
+        showPopup("Pick a reason first.");
+        return;
+      }
+      if (reason === "other" && !notes) {
+        showPopup('Notes are required when the reason is "Other".');
+        return;
+      }
+      const alertNotes = document.getElementById("modalNotesInput").value;
+      let assignedFields = {};
+      if (ASSIGNMENT_ENABLED) {
+        const assignedTo = Array.from(selectedAssignees);
+        if (!sameAssignees(assignedTo, alert.assigned_to || [])) {
+          assignedFields = { assigned_to: assignedTo, assigned_at: assignedTo.length ? new Date().toISOString() : null };
+        }
+      }
+      const notesChanged = alertNotes !== (alert.alert_notes || "");
+      modalMarkReviewedBtn.disabled = true;
+      document.getElementById("modalSaveStatus").textContent = "Saving…";
+      try {
+        await callApi(`/alerts/${alert.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ ...(notesChanged ? { alert_notes: alertNotes } : {}), reviewed: true, review_reason: reason, review_notes: notes, ...assignedFields })
+        });
+        await Promise.all([loadAlerts(), loadMetrics()]);
+        closeModal();
+      } catch (err) {
+        modalMarkReviewedBtn.disabled = false;
+        document.getElementById("modalSaveStatus").textContent = "";
+        console.error("Mark reviewed failed", err);
+        showPopup("Couldn't mark reviewed. Check console for details.");
+      }
+    });
+
+    const modalClearReviewBtn = document.getElementById("modalClearReviewBtn");
+    if (modalClearReviewBtn) modalClearReviewBtn.addEventListener("click", async () => {
+      const notes = document.getElementById("modalNotesInput").value;
+      let assignedFields = {};
+      if (ASSIGNMENT_ENABLED) {
+        const assignedTo = Array.from(selectedAssignees);
+        if (!sameAssignees(assignedTo, alert.assigned_to || [])) {
+          assignedFields = { assigned_to: assignedTo, assigned_at: assignedTo.length ? new Date().toISOString() : null };
+        }
+      }
+      const notesChanged = notes !== (alert.alert_notes || "");
+      modalClearReviewBtn.disabled = true;
+      document.getElementById("modalSaveStatus").textContent = "Saving…";
+      try {
+        await callApi(`/alerts/${alert.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ ...(notesChanged ? { alert_notes: notes } : {}), reviewed: false, ...assignedFields })
+        });
+        await Promise.all([loadAlerts(), loadMetrics()]);
+        closeModal();
+      } catch (err) {
+        modalClearReviewBtn.disabled = false;
+        document.getElementById("modalSaveStatus").textContent = "";
+        console.error("Clear review failed", err);
+        showPopup("Couldn't clear review. Check console for details.");
+      }
+    });
   }
 
   function closeModal() {
@@ -1328,6 +1462,15 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     if (e.target.tagName !== "BUTTON") return;
     assigneeFilter = e.target.dataset.assignee;
     document.querySelectorAll("#assigneeSeg button").forEach(b => b.classList.remove("active"));
+    e.target.classList.add("active");
+    loadAlerts();
+    loadMetrics();
+  });
+
+  document.getElementById("reviewedSeg").addEventListener("click", (e) => {
+    if (e.target.tagName !== "BUTTON") return;
+    reviewedFilter = e.target.dataset.reviewed;
+    document.querySelectorAll("#reviewedSeg button").forEach(b => b.classList.remove("active"));
     e.target.classList.add("active");
     loadAlerts();
     loadMetrics();

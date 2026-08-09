@@ -20,6 +20,41 @@ CRITICAL_THRESHOLD_SQL = """
     END
 """
 
+REVIEW_REASON_CODES = {
+    "rebill", "invalid_credentials", "vendor_site_unavailable",
+    "waiting_on_client", "waiting_on_vendor", "final_bill", "seasonal", "other",
+}
+
+
+def validate_review_update(update_fields):
+    """Validate/normalize the reviewed-related PATCH fields in place.
+
+    Returns an error message string if invalid, else None. When `reviewed`
+    isn't being set to True, review_reason/review_notes are stripped from
+    update_fields — those columns are never client-cleared (see design spec:
+    they always hold the most recent review as history, even after a clear).
+    """
+    if not any(k in update_fields for k in ("reviewed", "review_reason", "review_notes")):
+        return None
+    if "reviewed" not in update_fields:
+        # review_reason/review_notes only make sense alongside reviewed=true
+        # in the same request — on their own they're not a valid update.
+        return "review_reason/review_notes require reviewed=true in the same request"
+    reviewed = update_fields["reviewed"] in (True, 1, "1", "true", "True")
+    update_fields["reviewed"] = reviewed
+    if reviewed:
+        reason = update_fields.get("review_reason")
+        if reason not in REVIEW_REASON_CODES:
+            return f"review_reason must be one of: {sorted(REVIEW_REASON_CODES)}"
+        notes = (update_fields.get("review_notes") or "").strip()
+        if reason == "other" and not notes:
+            return "review_notes is required when review_reason is 'other'"
+    else:
+        update_fields.pop("review_reason", None)
+        update_fields.pop("review_notes", None)
+    return None
+
+
 def get_caller_email(req: func.HttpRequest):
     principal_header = req.headers.get("X-MS-CLIENT-PRINCIPAL")
     if not principal_header:
@@ -155,7 +190,8 @@ def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
                    account_name, tax_id, billing_period, payment_method,
                    account_instructions, latest_account_note, alert_notes, entered, bill_pulled, snoozed_today,
                    last_bill_date, last_bill_due_date, assigned_to, assigned_at, v5_account_id,
-                   days_since_last_bill, days_alerted, credential_status
+                   days_since_last_bill, days_alerted, credential_status, snoozed_by, snoozed_at,
+                   reviewed, reviewed_by, reviewed_at, review_reason, review_notes
             FROM Alerts
             WHERE load_date = CAST(GETDATE() AS DATE)
               AND client_code IN ({placeholders})
@@ -200,14 +236,15 @@ def get_alerts(req: func.HttpRequest) -> func.HttpResponse:
             params.append("%" + account_search + "%")
 
         if req.params.get("assignee") == "me":
-            query += """ AND (
-                LOWER(assigned_to) = LOWER(?)
-                OR (ISJSON(assigned_to) = 1 AND EXISTS (
-                    SELECT 1 FROM OPENJSON(assigned_to) WHERE LOWER(value) = LOWER(?)
-                ))
-            )"""
+            query += " AND (LOWER(assigned_to) = LOWER(?) OR LOWER(assigned_to) = LOWER(?))"
+            params.append(json.dumps([email]))
             params.append(email)
-            params.append(email)
+
+        reviewed_param = req.params.get("reviewed")
+        if reviewed_param == "true":
+            query += " AND reviewed = 1"
+        elif reviewed_param == "false":
+            query += " AND reviewed = 0"
 
         query += " ORDER BY client_code ASC, last_bill_date ASC"
 
@@ -288,14 +325,15 @@ def get_metrics(req: func.HttpRequest) -> func.HttpResponse:
             params.append("%" + account_search + "%")
 
         if req.params.get("assignee") == "me":
-            query += """ AND (
-                LOWER(assigned_to) = LOWER(?)
-                OR (ISJSON(assigned_to) = 1 AND EXISTS (
-                    SELECT 1 FROM OPENJSON(assigned_to) WHERE LOWER(value) = LOWER(?)
-                ))
-            )"""
+            query += " AND (LOWER(assigned_to) = LOWER(?) OR LOWER(assigned_to) = LOWER(?))"
+            params.append(json.dumps([email]))
             params.append(email)
-            params.append(email)
+
+        reviewed_param = req.params.get("reviewed")
+        if reviewed_param == "true":
+            query += " AND reviewed = 1"
+        elif reviewed_param == "false":
+            query += " AND reviewed = 0"
 
         cursor.execute(query, params)
         row = cursor.fetchone()
@@ -315,7 +353,8 @@ def get_metrics(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(json.dumps({"error": str(e)}), status_code=500, mimetype="application/json")
 
 
-ALLOWED_PATCH_FIELDS = {"alert_notes", "assigned_to", "assigned_at", "bill_pulled", "snoozed_today"}
+ALLOWED_PATCH_FIELDS = {"alert_notes", "assigned_to", "assigned_at", "bill_pulled", "snoozed_today",
+                         "reviewed", "review_reason", "review_notes"}
 
 @app.route(route="alerts/{id}", methods=["PATCH"])
 def patch_alert(req: func.HttpRequest) -> func.HttpResponse:
@@ -341,13 +380,22 @@ def patch_alert(req: func.HttpRequest) -> func.HttpResponse:
     update_fields = {k: v for k, v in body.items() if k in ALLOWED_PATCH_FIELDS}
     if "assigned_to" in update_fields:
         value = update_fields["assigned_to"] or []
-        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value) or len(value) > 1:
             return func.HttpResponse(
-                json.dumps({"error": "assigned_to must be an array of email strings"}),
+                json.dumps({"error": "assigned_to must be an array of at most one email string"}),
                 status_code=400,
                 mimetype="application/json"
             )
         update_fields["assigned_to"] = json.dumps(value)
+
+    review_validation_error = validate_review_update(update_fields)
+    if review_validation_error:
+        return func.HttpResponse(
+            json.dumps({"error": review_validation_error}),
+            status_code=400,
+            mimetype="application/json"
+        )
+
     if not update_fields:
         return func.HttpResponse(
             json.dumps({"error": f"No valid fields to update. Allowed: {sorted(ALLOWED_PATCH_FIELDS)}"}),
@@ -370,11 +418,20 @@ def patch_alert(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json"
             )
 
-        if update_fields.get("snoozed_today"):
+        review_audit_rows = []  # inserted after the main UPDATE commits, below
+
+        needs_precheck = (
+            update_fields.get("snoozed_today")
+            or "bill_pulled" in update_fields
+            or "reviewed" in update_fields
+        )
+        target = None
+        if needs_precheck:
             check_placeholders = ",".join("?" for _ in rls_codes)
             cursor.execute(
                 f"""
-                    SELECT entered,
+                    SELECT entered, reviewed, load_date, alert_type, v5_account_id,
+                           client_code, vendor, account_number,
                            CASE WHEN days_since_last_bill >= ({CRITICAL_THRESHOLD_SQL})
                                 THEN 1 ELSE 0 END AS is_critical
                     FROM Alerts
@@ -383,19 +440,67 @@ def patch_alert(req: func.HttpRequest) -> func.HttpResponse:
                 [alert_id] + rls_codes
             )
             target = cursor.fetchone()
-            if target and target.entered == 0 and target.is_critical:
-                conn.close()
-                return func.HttpResponse(
-                    json.dumps({"error": "Cannot snooze a Critical alert."}),
-                    status_code=400,
-                    mimetype="application/json"
-                )
+
+        if update_fields.get("snoozed_today") and target and target.entered == 0 and target.is_critical:
+            conn.close()
+            return func.HttpResponse(
+                json.dumps({"error": "Cannot snooze a Critical alert."}),
+                status_code=400,
+                mimetype="application/json"
+            )
+
+        # bill_pulled changing (either direction) clears an active review —
+        # the situation moved, so the reason it was held no longer applies.
+        bill_pulled_cleared_review = False
+        if target and "bill_pulled" in update_fields and target.reviewed:
+            update_fields["reviewed"] = False
+            bill_pulled_cleared_review = True
+            review_audit_rows.append((
+                target.load_date, target.alert_type, target.v5_account_id,
+                target.client_code, target.vendor, target.account_number,
+                "cleared", email.lower(), None, None, "bill_pulled",
+            ))
+
+        if target and update_fields.get("reviewed") is True:
+            review_audit_rows.append((
+                target.load_date, target.alert_type, target.v5_account_id,
+                target.client_code, target.vendor, target.account_number,
+                "reviewed", email.lower(), update_fields.get("review_reason"),
+                update_fields.get("review_notes"), None,
+            ))
+        elif (
+            target and not bill_pulled_cleared_review
+            and update_fields.get("reviewed") is False and target.reviewed
+        ):
+            review_audit_rows.append((
+                target.load_date, target.alert_type, target.v5_account_id,
+                target.client_code, target.vendor, target.account_number,
+                "cleared", email.lower(), None, None, "manual",
+            ))
 
         # server-side author stamp: whoever writes/edits the note is recorded
         # (notes_author is intentionally NOT client-patchable) — used by the
         # nightly V5 write-back to append the '*<v5 user id>' suffix.
         if "alert_notes" in update_fields:
             update_fields["notes_author"] = email.lower()
+
+        # server-side snooze stamp: who snoozed and when (cleared on unsnooze).
+        # snoozed_by/snoozed_at are NOT client-patchable — used by the nightly
+        # SnoozeAudit for per-member snooze metrics.
+        if "snoozed_today" in update_fields:
+            if update_fields["snoozed_today"] in (True, 1, "1", "true", "True"):
+                update_fields["snoozed_by"] = email.lower()
+                update_fields["snoozed_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+            else:
+                update_fields["snoozed_by"] = None
+                update_fields["snoozed_at"] = None
+
+        # server-side review stamp: who reviewed and when. Only stamped when
+        # the client is setting reviewed=True — a clear (any trigger) leaves
+        # these columns untouched (see Global Constraints in the plan).
+        if update_fields.get("reviewed") is True:
+            update_fields["reviewed_by"] = email.lower()
+            update_fields["reviewed_at"] = datetime.datetime.now().isoformat(timespec="seconds")
 
         set_clause = ", ".join(f"{field} = ?" for field in update_fields)
         placeholders = ",".join("?" for _ in rls_codes)
@@ -409,6 +514,16 @@ def patch_alert(req: func.HttpRequest) -> func.HttpResponse:
         """
         cursor.execute(query, params)
         rows_affected = cursor.rowcount
+
+        if review_audit_rows:
+            cursor.executemany(
+                """INSERT INTO ReviewAudit
+                   (load_date, alert_type, v5_account_id, client_code, vendor, account_number,
+                    action, staff, reason, notes, clear_trigger)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);""",
+                review_audit_rows
+            )
+
         conn.commit()
         conn.close()
 
