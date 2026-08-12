@@ -1274,7 +1274,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
           })
         });
         statusEl.textContent = "Saved";
-        await Promise.all([loadAlerts(), loadMetrics()]);
+        await Promise.all([loadAlertsSilent(), loadMetrics()]);
       } catch (err) {
         statusEl.textContent = "Failed to save";
         console.error(err);
@@ -1301,7 +1301,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
           method: "PATCH",
           body: JSON.stringify({ ...(notesChanged ? { alert_notes: notes } : {}), snoozed_today: nextSnoozed, ...assignedFields })
         });
-        await Promise.all([loadAlerts(), loadMetrics()]);
+        await Promise.all([loadAlertsSilent(), loadMetrics()]);
         closeModal();
       } catch (err) {
         btn.disabled = false;
@@ -1335,7 +1335,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
           method: "PATCH",
           body: JSON.stringify({ ...(notesChanged ? { alert_notes: notes } : {}), bill_pulled: nextBillPulled, ...assignedFields })
         });
-        await Promise.all([loadAlerts(), loadMetrics()]);
+        await Promise.all([loadAlertsSilent(), loadMetrics()]);
         closeModal();
       } catch (err) {
         btn.disabled = false;
@@ -1374,7 +1374,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
           method: "PATCH",
           body: JSON.stringify({ ...(notesChanged ? { alert_notes: alertNotes } : {}), reviewed: true, review_reason: reason, review_notes: notes, ...assignedFields })
         });
-        await Promise.all([loadAlerts(), loadMetrics()]);
+        await Promise.all([loadAlertsSilent(), loadMetrics()]);
         closeModal();
       } catch (err) {
         modalMarkReviewedBtn.disabled = false;
@@ -1402,7 +1402,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
           method: "PATCH",
           body: JSON.stringify({ ...(notesChanged ? { alert_notes: notes } : {}), reviewed: false, ...assignedFields })
         });
-        await Promise.all([loadAlerts(), loadMetrics()]);
+        await Promise.all([loadAlertsSilent(), loadMetrics()]);
         closeModal();
       } catch (err) {
         modalClearReviewBtn.disabled = false;
