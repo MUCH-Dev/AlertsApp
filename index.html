@@ -400,6 +400,10 @@
         <input type="text" id="accountSearch" placeholder="Search…">
       </div>
       <div class="field">
+        <label>Account name</label>
+        <input type="text" id="accountNameSearch" placeholder="Search…">
+      </div>
+      <div class="field">
         <label>Alert type</label>
         <div class="status-seg" id="typeSeg">
           <button data-type="All" class="active">All</button>
@@ -511,6 +515,7 @@
   let reviewedFilter = "all";
   let clientSearchDebounce = null;
   let accountSearchDebounce = null;
+  let accountNameSearchDebounce = null;
   let currentAlerts = [];
   let sortColumn = null;
   let sortDirection = "asc";
@@ -762,6 +767,8 @@
     if (clientSearch) params.set("client_code_search", clientSearch);
     const accountSearch = document.getElementById("accountSearch").value.trim();
     if (accountSearch) params.set("account_number_search", accountSearch);
+    const accountNameSearch = document.getElementById("accountNameSearch").value.trim();
+    if (accountNameSearch) params.set("account_name_search", accountNameSearch);
     if (selectedVendors.size > 0) params.set("vendor", Array.from(selectedVendors).join(","));
     if (assigneeFilter === "me") params.set("assignee", "me");
     if (reviewedFilter !== "all") params.set("reviewed", reviewedFilter === "reviewed" ? "true" : "false");
@@ -1494,6 +1501,11 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
   document.getElementById("accountSearch").addEventListener("input", () => {
     clearTimeout(accountSearchDebounce);
     accountSearchDebounce = setTimeout(() => { loadAlerts(); loadMetrics(); }, 350);
+  });
+
+  document.getElementById("accountNameSearch").addEventListener("input", () => {
+    clearTimeout(accountNameSearchDebounce);
+    accountNameSearchDebounce = setTimeout(() => { loadAlerts(); loadMetrics(); }, 350);
   });
 
   document.getElementById("loginBtn").addEventListener("click", () => {
