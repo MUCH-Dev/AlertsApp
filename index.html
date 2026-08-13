@@ -718,7 +718,7 @@
             <span class="client-code">${escapeHtml(alert.client_code)}</span>
           </span>
           <span class="pill-group">
-            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${reviewedBadge(alert)}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>${credentialBadge(alert)}${assigneeBadge(alert)}
+            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${reviewedBadge(alert)}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}${(isCritical && status.cls === "pending") ? "" : `<span class="status-pill ${status.cls}">${status.label}</span>`}${credentialBadge(alert)}${assigneeBadge(alert)}
           </span>
         </div>
         <h3>${escapeHtml(alert.client_name)}</h3>
@@ -750,7 +750,7 @@
         <td class="mono">${alert.account_number ? escapeHtml(alert.account_number) : "—"}</td>
         <td>
           <span class="pill-group">
-            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${reviewedBadge(alert)}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>${credentialBadge(alert)}
+            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${reviewedBadge(alert)}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}${(isCritical && status.cls === "pending") ? "" : `<span class="status-pill ${status.cls}">${status.label}</span>`}${credentialBadge(alert)}
           </span>
         </td>
         <td class="col-assigned">${assigneeBadge(alert) || "—"}</td>
@@ -1158,7 +1158,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
         <h2>${escapeHtml(alert.client_name)}</h2>
         <button class="modal-close" id="modalCloseBtn">&times;</button>
       </div>
-      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · ${isCritical ? `<span class="status-pill critical">Critical</span> ` : ""}${reviewedBadge(alert)} <span class="status-pill ${status.cls}">${status.label}</span> ${credentialBadge(alert)}</div>
+      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · ${isCritical ? `<span class="status-pill critical">Critical</span> ` : ""}${reviewedBadge(alert)} ${(isCritical && status.cls === "pending") ? "" : `<span class="status-pill ${status.cls}">${status.label}</span>`} ${credentialBadge(alert)}</div>
 
       <div class="modal-grid">
         <div><div class="k">Account number</div><div class="v">${escapeHtml(alert.account_number)}</div></div>
