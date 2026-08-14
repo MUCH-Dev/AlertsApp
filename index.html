@@ -1513,8 +1513,27 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
   });
 
   document.getElementById("loginBtn").addEventListener("click", () => {
-    msalInstance.loginRedirect({ scopes: [API_SCOPE] });
+    msalInstance.loginRedirect({ scopes: [API_SCOPE, "User.Read"] });
   });
+
+  async function getEmployeeIdFromGraph(account) {
+    try {
+      const tokenRes = await msalInstance.acquireTokenSilent({ scopes: ["User.Read"], account });
+      const graphRes = await fetch("https://graph.microsoft.com/v1.0/me?$select=employeeId", {
+        headers: { Authorization: `Bearer ${tokenRes.accessToken}` }
+      });
+      if (!graphRes.ok) {
+        console.error("Graph employeeId lookup failed", graphRes.status, await graphRes.text());
+        return null;
+      }
+      const data = await graphRes.json();
+      console.log("Graph /me response (employee ID test)", data);
+      return data.employeeId || null;
+    } catch (e) {
+      console.error("Graph employeeId lookup threw", e);
+      return null;
+    }
+  }
 
   document.getElementById("logoutBtn").addEventListener("click", () => {
     msalInstance.logoutRedirect();
@@ -1532,6 +1551,11 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
     msalInstance.setActiveAccount(account);
     setViewState(true);
     document.getElementById("whoLabel").textContent = account.username;
+    getEmployeeIdFromGraph(account).then(employeeId => {
+      if (employeeId) {
+        document.getElementById("whoLabel").textContent = account.username + ` — Emp #${employeeId}`;
+      }
+    });
 
     await Promise.all([loadMetrics(), loadVendors(), ...(ASSIGNMENT_ENABLED ? [loadTeamMembers()] : [])]);
     if (ASSIGNMENT_ENABLED) populateBatchAssignSelect();
