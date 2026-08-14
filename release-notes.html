@@ -216,16 +216,102 @@
       <span class="beacon" aria-hidden="true"></span>
       <span class="wordmark">Watchtower</span>
     </div>
-    <div class="masthead-meta">Release Notes<br>Updated 2026-08-05</div>
+    <div class="masthead-meta">Release Notes<br>Updated 2026-08-14</div>
   </div>
 
   <p class="eyebrow">What's new</p>
-  <h1>Seven updates to how you track, sort, and act on alerts.</h1>
-  <p class="intro">This round of changes is aimed at three things: keeping the list current without babysitting it, letting you act on an alert without leaving its detail card, and making it faster to handle a batch of alerts at once. Here's what's changing and why it should make the day-to-day a bit smoother.</p>
+  <h1>Thirteen updates to how you track, sort, and act on alerts.</h1>
+  <p class="intro">This round of changes is aimed at four things: keeping the list current without babysitting it, letting you act on an alert without leaving its detail card, making it faster to handle a batch of alerts at once, and giving Critical alerts a paper trail once someone's looked into them. Here's what's changing and why it should make the day-to-day a bit smoother.</p>
 
   <div class="status-pill"><span class="dot" aria-hidden="true"></span>Live now</div>
 
   <div class="log">
+
+    <div class="entry">
+      <div class="entry-head">
+        <span class="entry-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12l9-9h7a1 1 0 0 1 1 1v7l-9 9a1 1 0 0 1-1.4 0l-6.6-6.6a1 1 0 0 1 0-1.4z"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+          </svg>
+        </span>
+        <h2>Less pill clutter on Critical alerts</h2>
+      </div>
+      <p class="fine entry-date">August 14, 2026</p>
+      <p>A Critical alert that hasn't had its bill pulled yet no longer also shows a Pending pill next to Critical — one less redundant badge to read past. Bill Pulled still shows alongside Critical when it applies, since that's real information about where the alert stands.</p>
+    </div>
+
+    <div class="entry">
+      <div class="entry-head">
+        <span class="entry-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="5" width="16" height="6" rx="1.5"/>
+            <rect x="4" y="14" width="16" height="5" rx="1.5"/>
+          </svg>
+        </span>
+        <h2>A tidier filter bar</h2>
+      </div>
+      <p class="fine entry-date">August 14, 2026</p>
+      <p>The filter bar now groups its controls into two rows: search boxes (client code, vendor, account number, account name) on top, and toggles (alert type, status, assignee, review status) below. Same filters, easier to scan.</p>
+    </div>
+
+    <div class="entry">
+      <div class="entry-head">
+        <span class="entry-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="7"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </span>
+        <h2>Search alerts by account name</h2>
+      </div>
+      <p class="fine entry-date">August 13, 2026</p>
+      <p>The filter bar now has a search box for account name, right next to account number. Type any part of a name and the list — and the metric counts — narrow to matches right away.</p>
+    </div>
+
+    <div class="entry">
+      <div class="entry-head">
+        <span class="entry-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="4" width="14" height="17" rx="2"/>
+            <path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/>
+            <path d="M9 12l2 2 4-4"/>
+          </svg>
+        </span>
+        <h2>Mark Reviewed for Critical alerts</h2>
+      </div>
+      <p class="fine entry-date">August 11, 2026</p>
+      <p>Critical alerts you've already looked into can now be marked Reviewed straight from the detail card — pick a reason from the dropdown (sorted alphabetically now, with Other pinned to the end) and add an optional note for context. Reviewed alerts get a badge on cards, rows, and the detail view, and there's a new Reviewed/Unreviewed filter to slice the list down to just what you need. Marked something by mistake? Clear Review puts it back to Unreviewed.</p>
+    </div>
+
+    <div class="entry">
+      <div class="entry-head">
+        <span class="entry-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+        </span>
+        <h2>Faster to load and respond</h2>
+      </div>
+      <p class="fine entry-date">August 7, 2026</p>
+      <p>Trimmed a couple of resources that were holding up the page before anything could show up on screen, and the backend now keeps an instance warmed up around the clock instead of spinning one up cold on your first request of the day. Opening the app and acting on an alert should both feel quicker.</p>
+    </div>
+
+    <div class="entry">
+      <div class="entry-head">
+        <span class="entry-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 3 21 3 21 9"/>
+            <polyline points="9 21 3 21 3 15"/>
+            <line x1="21" y1="3" x2="14" y2="10"/>
+            <line x1="3" y1="21" x2="10" y2="14"/>
+          </svg>
+        </span>
+        <h2>More room for the Snooze button</h2>
+      </div>
+      <p class="fine entry-date">August 7, 2026</p>
+      <p>The detail card was tight enough on some screens that Snooze got clipped off the edge. The app's content area is wider now, so Snooze, Bill Pulled, and Save all have room to sit comfortably side by side.</p>
+    </div>
 
     <div class="entry">
       <div class="entry-head">
