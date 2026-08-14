@@ -89,9 +89,9 @@
   /* ---- Filter bar ---- */
   .filterbar{
     background:var(--surface); border:1px solid var(--border); border-radius:12px;
-    padding:14px 16px; margin-bottom:18px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;
-    justify-content:center;
+    padding:14px 16px; margin-bottom:18px; display:flex; flex-direction:column; gap:12px;
   }
+  .filterbar-row{ display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:center; }
   .field{ display:flex; flex-direction:column; gap:4px; }
   .field label{ font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:600; }
   .field input:not([type="checkbox"]), .field select{
@@ -383,54 +383,62 @@
     </div>
 
     <div class="filterbar">
-      <div class="field">
-        <label>Client code</label>
-        <input type="text" id="clientSearch" placeholder="Starts with…">
-      </div>
-      <div class="field">
-        <label>Vendor</label>
-        <div class="combo" id="vendorCombo">
-          <div class="combo-chips" id="vendorChips"></div>
-          <input type="text" id="vendorSearchInput" placeholder="All vendors" autocomplete="off">
-          <div class="combo-panel" id="vendorPanel"></div>
+      <div class="filterbar-row filterbar-row--search">
+        <div class="field">
+          <label>Client code</label>
+          <input type="text" id="clientSearch" placeholder="Starts with…">
+        </div>
+        <div class="field">
+          <label>Vendor</label>
+          <div class="combo" id="vendorCombo">
+            <div class="combo-chips" id="vendorChips"></div>
+            <input type="text" id="vendorSearchInput" placeholder="All vendors" autocomplete="off">
+            <div class="combo-panel" id="vendorPanel"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Account number</label>
+          <input type="text" id="accountSearch" placeholder="Search…">
+        </div>
+        <div class="field">
+          <label>Account name</label>
+          <input type="text" id="accountNameSearch" placeholder="Search…">
         </div>
       </div>
-      <div class="field">
-        <label>Account number</label>
-        <input type="text" id="accountSearch" placeholder="Search…">
-      </div>
-      <div class="field">
-        <label>Alert type</label>
-        <div class="status-seg" id="typeSeg">
-          <button data-type="All" class="active">All</button>
-          <button data-type="Billable">Billable</button>
-          <button data-type="Supply">Supply</button>
+      <div class="filterbar-row filterbar-row--toggles">
+        <div class="field">
+          <label>Alert type</label>
+          <div class="status-seg" id="typeSeg">
+            <button data-type="All" class="active">All</button>
+            <button data-type="Billable">Billable</button>
+            <button data-type="Supply">Supply</button>
+          </div>
         </div>
-      </div>
-      <div class="field">
-        <label>Status</label>
-        <div class="status-seg" id="statusSeg">
-          <button data-status="Active" class="active">Active</button>
-          <button data-status="Critical">Critical</button>
-          <button data-status="Bill Pulled">Bill Pulled</button>
-          <button data-status="Entered">Entered</button>
-          <button data-status="Snoozed">Snoozed</button>
-          <button data-status="All">All</button>
+        <div class="field">
+          <label>Status</label>
+          <div class="status-seg" id="statusSeg">
+            <button data-status="Active" class="active">Active</button>
+            <button data-status="Critical">Critical</button>
+            <button data-status="Bill Pulled">Bill Pulled</button>
+            <button data-status="Entered">Entered</button>
+            <button data-status="Snoozed">Snoozed</button>
+            <button data-status="All">All</button>
+          </div>
         </div>
-      </div>
-      <div class="field assignee-field">
-        <label>Assignee</label>
-        <div class="status-seg" id="assigneeSeg">
-          <button data-assignee="all" class="active">Everyone</button>
-          <button data-assignee="me">Me</button>
+        <div class="field assignee-field">
+          <label>Assignee</label>
+          <div class="status-seg" id="assigneeSeg">
+            <button data-assignee="all" class="active">Everyone</button>
+            <button data-assignee="me">Me</button>
+          </div>
         </div>
-      </div>
-      <div class="field">
-        <label>Review status</label>
-        <div class="status-seg" id="reviewedSeg">
-          <button data-reviewed="all" class="active">All</button>
-          <button data-reviewed="reviewed">Reviewed</button>
-          <button data-reviewed="unreviewed">Unreviewed</button>
+        <div class="field">
+          <label>Review status</label>
+          <div class="status-seg" id="reviewedSeg">
+            <button data-reviewed="all" class="active">All</button>
+            <button data-reviewed="reviewed">Reviewed</button>
+            <button data-reviewed="unreviewed">Unreviewed</button>
+          </div>
         </div>
       </div>
     </div>
@@ -511,6 +519,7 @@
   let reviewedFilter = "all";
   let clientSearchDebounce = null;
   let accountSearchDebounce = null;
+  let accountNameSearchDebounce = null;
   let currentAlerts = [];
   let sortColumn = null;
   let sortDirection = "asc";
@@ -709,7 +718,7 @@
             <span class="client-code">${escapeHtml(alert.client_code)}</span>
           </span>
           <span class="pill-group">
-            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${reviewedBadge(alert)}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>${credentialBadge(alert)}${assigneeBadge(alert)}
+            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${reviewedBadge(alert)}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}${(isCritical && status.cls === "pending") ? "" : `<span class="status-pill ${status.cls}">${status.label}</span>`}${credentialBadge(alert)}${assigneeBadge(alert)}
           </span>
         </div>
         <h3>${escapeHtml(alert.client_name)}</h3>
@@ -741,7 +750,7 @@
         <td class="mono">${alert.account_number ? escapeHtml(alert.account_number) : "—"}</td>
         <td>
           <span class="pill-group">
-            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${reviewedBadge(alert)}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}<span class="status-pill ${status.cls}">${status.label}</span>${credentialBadge(alert)}
+            ${isCritical ? `<span class="status-pill critical">Critical</span>` : ""}${reviewedBadge(alert)}${isSnoozed ? `<span class="status-pill snoozed">Snoozed</span>` : ""}${(isCritical && status.cls === "pending") ? "" : `<span class="status-pill ${status.cls}">${status.label}</span>`}${credentialBadge(alert)}
           </span>
         </td>
         <td class="col-assigned">${assigneeBadge(alert) || "—"}</td>
@@ -762,6 +771,8 @@
     if (clientSearch) params.set("client_code_search", clientSearch);
     const accountSearch = document.getElementById("accountSearch").value.trim();
     if (accountSearch) params.set("account_number_search", accountSearch);
+    const accountNameSearch = document.getElementById("accountNameSearch").value.trim();
+    if (accountNameSearch) params.set("account_name_search", accountNameSearch);
     if (selectedVendors.size > 0) params.set("vendor", Array.from(selectedVendors).join(","));
     if (assigneeFilter === "me") params.set("assignee", "me");
     if (reviewedFilter !== "all") params.set("reviewed", reviewedFilter === "reviewed" ? "true" : "false");
@@ -1147,7 +1158,7 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
         <h2>${escapeHtml(alert.client_name)}</h2>
         <button class="modal-close" id="modalCloseBtn">&times;</button>
       </div>
-      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · ${isCritical ? `<span class="status-pill critical">Critical</span> ` : ""}${reviewedBadge(alert)} <span class="status-pill ${status.cls}">${status.label}</span> ${credentialBadge(alert)}</div>
+      <div class="modal-sub">${escapeHtml(alert.client_code)} · ${escapeHtml(alert.vendor)} · ${isCritical ? `<span class="status-pill critical">Critical</span> ` : ""}${reviewedBadge(alert)} ${(isCritical && status.cls === "pending") ? "" : `<span class="status-pill ${status.cls}">${status.label}</span>`} ${credentialBadge(alert)}</div>
 
       <div class="modal-grid">
         <div><div class="k">Account number</div><div class="v">${escapeHtml(alert.account_number)}</div></div>
@@ -1494,6 +1505,11 @@ document.getElementById("selectAllCheckbox").addEventListener("change", (e) => {
   document.getElementById("accountSearch").addEventListener("input", () => {
     clearTimeout(accountSearchDebounce);
     accountSearchDebounce = setTimeout(() => { loadAlerts(); loadMetrics(); }, 350);
+  });
+
+  document.getElementById("accountNameSearch").addEventListener("input", () => {
+    clearTimeout(accountNameSearchDebounce);
+    accountNameSearchDebounce = setTimeout(() => { loadAlerts(); loadMetrics(); }, 350);
   });
 
   document.getElementById("loginBtn").addEventListener("click", () => {
